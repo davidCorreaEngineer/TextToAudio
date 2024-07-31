@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google TTS Generator</title>
+    
+    <!-- **1. Included Bootstrap CSS for Modern UI and Responsive Design** -->
+    <link
+        rel="stylesheet"
+        href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
+    
+    <!-- **2. Included Chart.js for Data Visualization** -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- **3. Included Font Awesome for Icons** -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+        integrity="sha512-dY0D9owV5bY+uJYpbE9M/8B1+l0L4PNFzBB3MItNpJqgPp5B5x9PpLN3GJvQ8YvkvX5HqA4ZpQ3a4W6gDk5xCg=="
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+    
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: #f8f9fa; 
+        }
+        /* **4. Styled Drag-and-Drop Zone** */
+        #dropZone {
+            background-color: #ffffff;
+            border: 2px dashed #ced4da;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        #dropZone.dragover {
+            background-color: #e9ecef;
+            border-color: #495057;
+        }
+        /* **5. Styled Progress Bar** */
+        #progressContainer {
+            display: none;
+            margin-top: 20px;
+        }
+        /* **6. Styled Advanced Settings Section** */
+        #advancedSettings {
+            margin-top: 20px;
+        }
+        /* **7. Styled Text Preview Area** */
+        #textPreview {
+            resize: vertical;
+        }
+        /* **8. Dashboard Styling** */
+        #dashboard {
+            margin-top: 50px;
+        }
+        #dashboard h2 {
+            margin-bottom: 20px;
+        }
+        /* **9. Summary Cards Styling** */
+        .summary-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            background-color: #ffffff;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .summary-card:hover {
+            transform: translateY(-5px);
+        }
+        .summary-card h5 {
+            margin-bottom: 10px;
+            color: #6c757d;
+        }
+        .summary-card p {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        /* **10. Voice Type Usage Styling** */
+        .voice-usage {
+            margin-bottom: 20px;
+        }
+        .voice-usage .progress {
+            height: 25px;
+        }
+        .voice-usage .progress-bar {
+            line-height: 25px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-5">
+        <h1 class="text-center mb-4">Google TTS Generator</h1>
+        
+        <form id="ttsForm">
+            <!-- **11. Drag-and-Drop File Upload Section** -->
+            <div
+                id="dropZone"
+                class="mb-3"
+            >
+                <p>Drag and drop a text file here or click to select one.</p>
+                <input
+                    type="file"
+                    id="textFile"
+                    name="textFile"
+                    accept=".txt"
+                    required
+                    hidden
+                />
+            </div>
+            
+            <!-- **12. File Size Display** -->
+            <div id="fileSize" class="mb-3"></div>
+            
+            <!-- **13. Language Selection** -->
+            <div class="form-group">
+                <label for="language">Language:</label>
+                <select class="form-control" id="language" name="language" required>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="en-AU">English (AU)</option>
+                    <option value="nl-NL">Dutch</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="de-DE">German</option>
+                    <option value="ja-JP">Japanese</option>
+                </select>
+            </div>
+            
+            <!-- **14. Voice Selection** -->
+            <div class="form-group">
+                <label for="voice">Voice:</label>
+                <select class="form-control" id="voice" name="voice" required>
+                    <option value="">Select a voice</option>
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            
+            <!-- **15. Advanced Settings Toggle Button** -->
+            <div class="form-group">
+                <button
+                    class="btn btn-link"
+                    type="button"
+                    data-toggle="collapse"
+                    data-target="#advancedSettings"
+                >
+                    Advanced Settings
+                </button>
+            </div>
+            
+            <!-- **16. Advanced Settings Section** -->
+            <div class="collapse" id="advancedSettings">
+                <!-- Speaking Rate -->
+                <div class="form-group">
+                    <label for="speakingRate">Speaking Rate:</label>
+                    <input
+                        type="range"
+                        class="custom-range"
+                        id="speakingRate"
+                        name="speakingRate"
+                        min="0.25"
+                        max="4.0"
+                        step="0.01"
+                        value="1.0"
+                    />
+                    <small class="form-text text-muted">
+                        Value: <span id="speakingRateValue">1.0</span>
+                    </small>
+                </div>
+                <!-- Pitch -->
+                <div class="form-group">
+                    <label for="pitch">Pitch:</label>
+                    <input
+                        type="range"
+                        class="custom-range"
+                        id="pitch"
+                        name="pitch"
+                        min="-20.0"
+                        max="20.0"
+                        step="0.1"
+                        value="0"
+                    />
+                    <small class="form-text text-muted">
+                        Value: <span id="pitchValue">0</span>
+                    </small>
+                </div>
+            </div>
+            
+            <!-- **17. Text Preview and Edit Section** -->
+            <div class="form-group">
+                <label for="textPreview">Text Preview:</label>
+                <textarea
+                    id="textPreview"
+                    name="textPreview"
+                    class="form-control"
+                    rows="10"
+                    readonly
+                ></textarea>
+            </div>
+            
+            <!-- **18. Action Buttons** -->
+            <div class="form-group text-center">
+                <button type="button" class="btn btn-secondary mr-2" id="testVoiceButton">
+                    Test Voice
+                </button>
+                <button type="submit" class="btn btn-primary">Generate Audio</button>
+            </div>
+        </form>
+        
+        <!-- **19. Progress Bar** -->
+        <div id="progressContainer" class="progress">
+            <div
+                id="progressBar"
+                class="progress-bar progress-bar-striped progress-bar-animated"
+                role="progressbar"
+                style="width: 0%;"
+                aria-valuenow="0"
+                aria-valuemin="0"
+                aria-valuemax="100"
+            ></div>
+        </div>
+        
+        <!-- **20. Test Sentence Display** -->
+        <div id="testSentence" class="mt-4"></div>
+        
+        <!-- **21. Audio Player** -->
+        <audio id="audioPlayer" class="mt-3 w-100" controls style="display: none;"></audio>
+        
+        <!-- **22. Result Display** -->
+        <div id="result" class="mt-4"></div>
+
+        <!-- **23. Dashboard Section** -->
+        <div id="dashboard" class="mt-5">
+            <h2>Usage Dashboard</h2>
+            <!-- **23.1. Summary Cards** -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="summary-card">
+                        <h5>Total Usage</h5>
+                        <p id="totalUsage">0</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="summary-card">
+                        <h5>Unique Voices Used</h5>
+                        <p id="uniqueVoices">0</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="summary-card">
+                        <h5>Current Month Usage</h5>
+                        <p id="currentMonthUsage">0</p>
+                    </div>
+                </div>
+            </div>
+            <!-- **23.2. Voice Type Usage Tracking** -->
+            <div class="voice-usage">
+                <h4>Voice Type Consumption</h4>
+                <div id="voiceUsageCards" class="row">
+                    <!-- Voice usage cards will be populated dynamically -->
+                </div>
+            </div>
+            <!-- **23.3. Charts** -->
+            <div class="row">
+                <div class="col-md-6">
+                    <canvas id="usageChart"></canvas>
+                </div>
+                <div class="col-md-6">
+                    <canvas id="voiceTypeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- **24. Included jQuery and Bootstrap JS** -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"
+    ></script>
+    
+    <!-- **25. Included External app_client.js for Custom Scripts** -->
+    <script src="app_client.js"></script>
+</body>
+</html>
