@@ -101,7 +101,7 @@ app.post('/synthesize', upload.single('textFile'), async (req, res) => {
         const textByteLength = Buffer.byteLength(text, 'utf8');
         
         if (textByteLength > MAX_TEXT_LENGTH) {
-            await fs.unlink(req.file.path); // Clean up the uploaded file
+            await fs.unlink(req.file.path);
             return res.status(400).json({ 
                 success: false, 
                 error: `Text is too long (${textByteLength} bytes). Maximum allowed is ${MAX_TEXT_LENGTH} bytes.`
@@ -116,11 +116,15 @@ app.post('/synthesize', upload.single('textFile'), async (req, res) => {
         };
 
         const [response] = await client.synthesizeSpeech(request);
-        const outputFileName = `output_${Date.now()}.mp3`;
+        
+        // Generate the output filename based on the input filename
+        const inputFileName = req.file.originalname.split('.').slice(0, -1).join('.');
+        const outputFileName = `${inputFileName}_audio.mp3`;
         const outputFile = path.join(__dirname, 'public', outputFileName);
+        
         await fs.writeFile(outputFile, response.audioContent, 'binary');
-        await fs.unlink(req.file.path); // Clean up the uploaded file
-        res.json({ success: true, file: outputFileName });
+        await fs.unlink(req.file.path);
+        res.json({ success: true, file: outputFileName, fileName: outputFileName });
     } catch (error) {
         console.error("Error generating speech:", error);
         res.status(500).json({ success: false, error: error.message });
