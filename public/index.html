@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google TTS Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        form { display: flex; flex-direction: column; gap: 10px; }
+        select, input[type="file"], button { margin-top: 5px; padding: 5px; }
+        #result, #fileSize, #testSentence { margin-top: 20px; }
+        .error { color: red; }
+        .warning { color: orange; }
+        #testVoiceButton { margin-top: 10px; }
+        #audioPlayer { margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <h1>Google TTS Generator</h1>
+    <form id="ttsForm">
+        <div>
+            <label for="textFile">Text File:</label>
+            <input type="file" id="textFile" name="textFile" accept=".txt" required>
+        </div>
+        <div id="fileSize"></div>
+        <div>
+            <label for="language">Language:</label>
+            <select id="language" name="language" required>
+                <option value="en-US">English</option>
+                <option value="es-ES">Spanish</option>
+                <option value="de-DE">German</option>
+            </select>
+        </div>
+        <div>
+            <label for="voice">Voice:</label>
+            <select id="voice" name="voice" required></select>
+        </div>
+        <button type="button" id="testVoiceButton">Test Voice</button>
+        <button type="submit">Generate Audio</button>
+    </form>
+    <div id="testSentence"></div>
+    <audio id="audioPlayer" controls></audio>
+    <div id="result"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('ttsForm');
+            const languageSelect = document.getElementById('language');
+            const voiceSelect = document.getElementById('voice');
+            const resultDiv = document.getElementById('result');
+            const fileSizeDiv = document.getElementById('fileSize');
+            const textFileInput = document.getElementById('textFile');
+            const testVoiceButton = document.getElementById('testVoiceButton');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const testSentenceDiv = document.getElementById('testSentence');
+
+            const MAX_TEXT_LENGTH = 5000;
+
+            async function loadVoices() {
+                try {
+                    console.log('Fetching voices from server...');
+                    const response = await fetch('/voices');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch voices');
+                    }
+                    const voices = await response.json();
+                    console.log('Received voices:', voices);
+                    updateVoiceOptions(voices);
+                } catch (error) {
+                    console.error('Error loading voices:', error);
+                    resultDiv.innerHTML = '<p class="error">Error loading voices. Please try again or check the server connection.</p>';
+                }
+            }
+
+            function updateVoiceOptions(voices) {
+                const language = languageSelect.value;
+                console.log('Selected language:', language);
+                voiceSelect.innerHTML = '<option value="">Select a voice</option>';
+                const filteredVoices = voices.filter(voice => voice.languageCodes[0].startsWith(language.slice(0, 2)));
+                console.log('Filtered voices for', language, ':', filteredVoices);
+                filteredVoices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.name;
+                    option.textContent = `${voice.name} (${voice.ssmlGender})`;
+                    voiceSelect.appendChild(option);
+                });
+            }
+
+            languageSelect.addEventListener('change', loadVoices);
+
+            textFileInput.addEventListener('change', async function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('textFile', file);
+
+                    try {
+                        const response = await fetch('/check-file-size', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        if (!response.ok) {
+                            throw new Error('Failed to check file size');
+                        }
+                        const result = await response.json();
+                        fileSizeDiv.textContent = `File size: ${result.byteLength} bytes`;
+                        if (result.byteLength > MAX_TEXT_LENGTH) {
+                            fileSizeDiv.innerHTML += '<br><span class="warning">Warning: File exceeds maximum allowed size.</span>';
+                        }
+                    } catch (error) {
+                        console.error('Error checking file size:', error);
+                        fileSizeDiv.innerHTML = '<span class="error">Error checking file size.</span>';
+                    }
+                }
+            });
+
+            testVoiceButton.addEventListener('click', async function() {
+                const language = languageSelect.value;
+                const voice = voiceSelect.value;
+                if (!voice) {
+                    alert('Please select a voice first.');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/test-voice', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ language, voice })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to test voice');
+                    }
+
+                    const result = await response.json();
+                    if (result.success) {
+                        audioPlayer.src = result.file;
+                        audioPlayer.style.display = 'block';
+                        audioPlayer.play();
+                        testSentenceDiv.textContent = `Test sentence: "${result.testText}"`;
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    console.error('Error testing voice:', error);
+                    resultDiv.innerHTML = `<p class="error">Error testing voice: ${error.message}</p>`;
+                }
+            });
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                
+                try {
+                    const response = await fetch('/synthesize', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (!response.ok) {
+                        throw new Error('Failed to generate audio');
+                    }
+                    const result = await response.json();
+                    if (result.success) {
+                        resultDiv.innerHTML = `<a href="${result.file}" download>Download Audio</a>`;
+                    } else {
+                        resultDiv.innerHTML = `<p class="error">Error: ${result.error}</p>`;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    resultDiv.innerHTML = '<p class="error">Error generating audio. Please try again.</p>';
+                }
+            });
+
+            // Initialize by loading voices
+            loadVoices();
+        });
+    </script>
+</body>
+</html>
