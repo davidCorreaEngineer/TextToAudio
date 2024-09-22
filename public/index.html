@@ -38,6 +38,10 @@
             cursor: pointer;
             transition: background-color 0.3s, border-color 0.3s;
         }
+		#pauseDurationContainer {
+            display: none;
+            margin-top: 10px;
+        }
         #dropZone.dragover {
             background-color: #e9ecef;
             border-color: #495057;
@@ -116,6 +120,18 @@
                     required
                     hidden
                 />
+            </div>
+			
+			<!-- **Add Checkbox for Pauses Between Sentences** -->
+			<div class="form-group">
+                <input type="checkbox" id="addPauses" name="addPauses">
+                <label for="addPauses">Add pauses between sentences</label>
+            </div>
+			
+			<!-- **Input for Pause Duration (ms)** -->
+            <div class="form-group" id="pauseDurationContainer">
+                <label for="pauseDuration">Pause Duration (ms):</label>
+                <input type="number" class="form-control" id="pauseDuration" name="pauseDuration" min="0" value="1000">
             </div>
             
             <!-- **12. File Size Display** -->

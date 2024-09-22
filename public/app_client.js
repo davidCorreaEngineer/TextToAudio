@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const pitchInput = document.getElementById('pitch');
     const pitchValue = document.getElementById('pitchValue');
     const dashboardDiv = document.getElementById('usageStats');
+	const addPausesCheckbox = document.getElementById('addPauses');
+    const pauseDurationContainer = document.getElementById('pauseDurationContainer');
+    const pauseDurationInput = document.getElementById('pauseDuration');
 
     // **1. Initialize Chart Variables**
     let usageChart;
@@ -54,6 +57,15 @@ document.addEventListener('DOMContentLoaded', function() {
             resultDiv.innerHTML = '<p class="text-danger">Error loading voices. Please try again or check the server connection.</p>';
         }
     }
+	
+	// **Show/Hide Pause Duration Input Based on Checkbox**
+    addPausesCheckbox.addEventListener('change', () => {
+        if (addPausesCheckbox.checked) {
+            pauseDurationContainer.style.display = 'block';
+        } else {
+            pauseDurationContainer.style.display = 'none';
+        }
+    });
 
     function updateVoiceOptions(voices) {
         const language = languageSelect.value;
@@ -201,6 +213,19 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("Text preview is empty.");
             return;
         }
+		
+		// **Process Text to Add Pauses if Enabled**
+        const addPauses = addPausesCheckbox.checked;
+        const pauseDuration = parseInt(pauseDurationInput.value) || 1000; // Default to 1000 ms if invalid
+
+        let processedText = editedText;
+        let useSsml = false;
+
+        if (addPauses) {
+            useSsml = true;
+            processedText = convertTextToSsml(editedText, pauseDuration);
+            console.log("Processed text with SSML:", processedText);
+        }
 
         const formData = new FormData();
 
@@ -209,8 +234,9 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('voice', voiceSelect.value);
         formData.append('speakingRate', speakingRateInput.value);
         formData.append('pitch', pitchInput.value);
-        formData.append('textContent', editedText); // **Added for Text Preview Editing**
-        formData.append('originalFileName', originalFileName); // **Added Original File Name**
+        formData.append('textContent', processedText);
+        formData.append('originalFileName', originalFileName);
+        formData.append('useSsml', useSsml);
 
         // Show Progress Bar
         progressContainer.style.display = 'block';
@@ -270,6 +296,30 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("Error during form submission.");
         }
     });
+	
+	// **Function to Convert Text to SSML with Pauses**
+    function convertTextToSsml(text, pauseDuration) {
+        // Split text into sentences based on periods, question marks, or exclamation marks
+        const sentenceEndRegex = /([.?!])/g;
+        const sentences = text.split(sentenceEndRegex).filter(s => s.trim() !== '');
+        let ssmlText = '<speak>';
+
+        for (let i = 0; i < sentences.length; i += 2) {
+            const sentence = sentences[i].trim();
+            const punctuation = sentences[i + 1] || '';
+            ssmlText += sentence + punctuation;
+
+            // If not the last sentence, and punctuation marks the end of a sentence, add a break
+            if (i + 2 < sentences.length && (punctuation === '.' || punctuation === '?' || punctuation === '!')) {
+                ssmlText += `<break time="${pauseDuration}ms"/> `;
+            } else {
+                ssmlText += ' ';
+            }
+        }
+
+        ssmlText += '</speak>';
+        return ssmlText;
+    }
 
     // **10. Fetch and Display Usage Statistics**
     async function fetchUsageStats() {

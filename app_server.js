@@ -179,33 +179,50 @@ app.post('/check-file-size', upload.single('textFile'), async (req, res) => {
 // **9. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
 app.post('/synthesize', upload.none(), async (req, res) => {
     try {
-        const text = req.body.textContent || ''; // Use edited text
+        let text = req.body.textContent || '';
         const language = req.body.language;
         const voice = req.body.voice;
         const speakingRate = parseFloat(req.body.speakingRate) || 1.0;
         const pitch = parseFloat(req.body.pitch) || 0.0;
         const originalFileName = req.body.originalFileName || `audio_${Date.now()}`;
+        const useSsml = req.body.useSsml === 'true';
 
-        console.log(`Received synthesize request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}, OriginalFileName=${originalFileName}`);
+        console.log(`Received synthesize request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}, OriginalFileName=${originalFileName}, UseSsml=${useSsml}`);
 
         if (!text) {
             console.log("No text provided for synthesis.");
             return res.status(400).json({ success: false, error: 'No text provided.' });
         }
 
-        const textByteLength = Buffer.byteLength(text, 'utf8');
-        console.log(`Text byte length: ${textByteLength}`);
+        // **Set Input Type Based on useSsml**
+        let input;
+        if (useSsml) {
+            input = { ssml: text };
+        } else {
+            input = { text: text };
+        }
 
-        if (textByteLength > MAX_TEXT_LENGTH) {
-            console.log(`Text exceeds maximum allowed size of ${MAX_TEXT_LENGTH} bytes.`);
+        // **Adjust Character Counting for Quota**
+        let count;
+        if (useSsml) {
+            count = countCharactersInSsml(text);
+        } else {
+            count = countCharacters(text);
+        }
+
+        console.log(`Character count for quota: ${count}`);
+
+        // **Check Text Length**
+        if (count > MAX_TEXT_LENGTH) {
+            console.log(`Text exceeds maximum allowed size of ${MAX_TEXT_LENGTH} characters.`);
             return res.status(400).json({ 
                 success: false, 
-                error: `Text is too long (${textByteLength} bytes). Maximum allowed is ${MAX_TEXT_LENGTH} bytes.`
+                error: `Text is too long (${count} characters). Maximum allowed is ${MAX_TEXT_LENGTH} characters.`
             });
         }
 
         const request = {
-            input: { text: text },
+            input: input,
             voice: { languageCode: language, name: voice },
             audioConfig: { 
                 audioEncoding: 'MP3',
@@ -219,15 +236,6 @@ app.post('/synthesize', upload.none(), async (req, res) => {
 
         // Determine voice type and count
         const voiceCategory = getVoiceCategory(voice);
-        let count;
-
-        if (['Standard', 'WaveNet'].includes(voiceCategory)) {
-            count = countCharacters(text);
-        } else {
-            count = countBytes(text);
-        }
-
-        console.log(`Voice category: ${voiceCategory}, Count: ${count}`);
 
         // Update quota
         await updateQuota(voiceCategory, count);
@@ -270,6 +278,13 @@ app.get('/dashboard', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// **Function to Count Characters in SSML Input**
+function countCharactersInSsml(ssmlText) {
+    // Remove SSML tags
+    const strippedText = ssmlText.replace(/<[^>]+>/g, '');
+    return strippedText.length;
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
