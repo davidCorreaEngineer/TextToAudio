@@ -97,7 +97,7 @@ app.get('/voices', async (req, res) => {
         console.log(`Total voices received: ${result.voices.length}`);
 
         // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English
-        const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'de-DE', 'ja-JP'];
+        const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP'];
 
         const voices = result.voices.filter(voice => 
             voice.languageCodes.some(code => supportedLanguages.includes(code))
@@ -127,6 +127,7 @@ app.post('/test-voice', express.json(), async (req, res) => {
             'en-GB': "The quick brown fox jumps over the lazy dog.",
             'en-AU': "The quick brown fox jumps over the lazy dog.",
             'es-ES': "El veloz murciélago hindú comía feliz cardillo y kiwi.",
+			'es-US': "El veloz murciélago hindú comía feliz cardillo y kiwi.",
             'de-DE': "Zwölf Boxkämpfer jagen Viktor quer über den großen Sylter Deich.",
             'nl-NL': "De snelle bruine vos springt over de luie hond.",
             'ja-JP': "いろはにほへとちりぬるを。"
