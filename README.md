@@ -1,6 +1,9 @@
 # Text-to-Speech Generator
 
+![TTS Web App Interface](tts_app.png "TTS Web App Main Screen")
+
 This project is a web application that converts text to speech using Google Cloud's Text-to-Speech API. Users can upload a text file, select a language and corresponding voice, and generate an audio file of the text being read aloud.
+There is one caveat, though, the file can not be bigger than 5kB.
 
 ## Features
 
@@ -22,7 +25,7 @@ This project is a web application that converts text to speech using Google Clou
 - Voice testing before full audio generation
 - Quota usage tracking for characters and bytes consumed per voice type
 - MP3 audio file generation and download
-- Responsive web design for desktop and mobile use
+- Responsive web design
 
 ## Prerequisites
 
