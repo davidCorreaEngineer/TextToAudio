@@ -5,73 +5,121 @@ This project is a web application that converts text to speech using Google Clou
 ## Features
 
 - Upload text files for conversion
-- Select from multiple languages, including:
+- Support for multiple languages:
   - English (US, UK, AU)
-  - Spanish
+  - Spanish (Spain, US)
   - German
   - Dutch
   - Japanese
-- Filtered voice options based on the selected language to prevent mismatches
-- Support for various voice types:
+- Filtered voice options based on the selected language
+- Various voice types:
   - Standard
   - WaveNet
   - Neural2
   - Polyglot
   - Studio
-- Customize speaking rate and pitch for generated audio
-- Test selected voices before generating the full audio file
-- Track and monitor quota usage for characters and bytes consumed per voice type
-- Download generated MP3 audio files
+- Customizable speaking rate and pitch
+- Voice testing before full audio generation
+- Quota usage tracking for characters and bytes consumed per voice type
+- MP3 audio file generation and download
+- Responsive web design for desktop and mobile use
 
 ## Prerequisites
 
-- Node.js
-- Google Cloud account with Text-to-Speech API enabled
-- Google Cloud service account key
+Before you begin, ensure you have met the following requirements:
 
-## Setup
+- [Node.js](https://nodejs.org/) (v14 or later) installed on your system
+- A Google Cloud account with the Text-to-Speech API enabled
+- A Google Cloud service account key (JSON file)
 
-1. **Clone the repository**:
+## Installation
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/davidCorreaEngineer/TextToAudio.git
+   cd TextToAudio
    ```
 
-2. **Install dependencies**:
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-3. **Set up your Google Cloud credentials**:
-   - Create a service account and download the JSON key file.
-   - Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of your JSON key file:
-     ```bash
-     export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/keyfile.json"
-     ```
+3. Set up your Google Cloud credentials:
+   - Place your Google Cloud service account JSON key file in the project root directory.
+   - Rename it to `keyfile.json` (or update the path in `app_server.js` if using a different name).
 
-4. **Start the server**:
-   ```bash
-   node app.js
+## Configuration
+
+1. Open `app_server.js` and ensure the `keyFilename` path is correct:
+   ```javascript
+   const client = new textToSpeech.TextToSpeechClient({
+     keyFilename: path.join(__dirname, 'keyfile.json')
+   });
    ```
 
-5. **Open a web browser and navigate to** `http://localhost:3000`
+2. (Optional) Modify the `MAX_TEXT_LENGTH` constant in `app_server.js` if you want to change the maximum allowed text length.
+
+## Running the Application
+
+1. Start the server:
+   ```bash
+   node app_server.js
+   ```
+
+2. Open a web browser and navigate to `http://localhost:3000`
 
 ## Usage
 
-1. **Upload a text file**: Drag and drop a text file or select one using the file picker.
-2. **Select a language and voice**: Choose the desired language and voice from the filtered options.
-3. **(Optional) Test the selected voice**: Test the selected voice to preview how it sounds.
-4. **Generate Audio**: Click "Generate Audio" to create an MP3 file of the text.
-5. **Download the audio file**: After generation, download the audio file directly.
+1. **Upload a text file**: 
+   - Drag and drop a text file onto the designated area, or
+   - Click the area to open a file picker and select your text file.
 
-## Technologies Used
+2. **Select language and voice**:
+   - Choose your desired language from the dropdown menu.
+   - Select a voice from the filtered options for that language.
 
-- Node.js
-- Express.js
-- Google Cloud Text-to-Speech API
-- Bootstrap (for responsive UI)
-- Chart.js (for visualizing usage data)
-- HTML/CSS/JavaScript
+3. **Adjust settings** (optional):
+   - Modify the speaking rate and pitch using the sliders.
+   - Check the "Add pauses between sentences" option if desired.
+
+4. **Test the voice** (optional):
+   - Click "Test Voice" to hear a sample of the selected voice and settings.
+
+5. **Generate Audio**:
+   - Click "Generate Audio" to create an MP3 file of your text.
+
+6. **Download**:
+   - Once generation is complete, click the "Download Audio" button to save your MP3 file.
+
+## Monitoring Usage
+
+The dashboard at the bottom of the page displays:
+- Total usage across all voice types
+- Number of unique voices used
+- Current month's usage
+- Consumption by voice type with progress bars
+
+## Troubleshooting
+
+- If you encounter CORS issues, ensure your Google Cloud project has the necessary permissions set up.
+- For "Quota Exceeded" errors, check your Google Cloud Console for current quota limits and usage.
+
+## Contributing
+
+Contributions to improve the Text-to-Speech Generator are welcome. Please follow these steps:
+
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-[MIT License](LICENSE)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Google Cloud for providing the Text-to-Speech API
+- The open-source community for the various libraries used in this project
