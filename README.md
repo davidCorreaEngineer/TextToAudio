@@ -1,6 +1,7 @@
 # Text-to-Speech Generator
 
 This project is a web application that converts text to speech using Google Cloud's Text-to-Speech API. Users can upload a text file, select a language and corresponding voice, and generate an audio file of the text being read aloud.
+![TTS Web App Interface](webApp.jpg "TTS Web App Main Screen")
 
 ## Features
 
