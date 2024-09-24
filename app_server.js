@@ -104,10 +104,6 @@ app.get('/voices', async (req, res) => {
         );
 
         console.log(`Filtered voices: ${voices.length}`);
-        console.log('Available voices:');
-        voices.forEach(voice => {
-            console.log(`- ${voice.name}: ${voice.languageCodes.join(', ')}`);
-        });
 
         res.json(voices);
     } catch (error) {
