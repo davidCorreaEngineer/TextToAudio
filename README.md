@@ -12,6 +12,10 @@ This project is a web application that converts text to speech using Google Clou
   - German
   - Dutch
   - Japanese
+  - Italian
+  - French
+  - Portuguese (Portugal, Brazil)
+  - Turkish
 - Filtered voice options based on the selected language
 - Various voice types:
   - Standard

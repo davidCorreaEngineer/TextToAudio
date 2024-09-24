@@ -96,8 +96,8 @@ app.get('/voices', async (req, res) => {
         const [result] = await client.listVoices({});
         console.log(`Total voices received: ${result.voices.length}`);
 
-        // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English
-        const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP'];
+        // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English, French, Italian, Portuguese and Portuguese
+		const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
 
         const voices = result.voices.filter(voice => 
             voice.languageCodes.some(code => supportedLanguages.includes(code))
@@ -122,16 +122,22 @@ app.post('/test-voice', express.json(), async (req, res) => {
         const { language, voice, speakingRate, pitch } = req.body;
         console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}`);
         
-        const testSentences = {
-            'en-US': "The quick brown fox jumps over the lazy dog.",
-            'en-GB': "The quick brown fox jumps over the lazy dog.",
-            'en-AU': "The quick brown fox jumps over the lazy dog.",
-            'es-ES': "El veloz murciélago hindú comía feliz cardillo y kiwi.",
-			'es-US': "El veloz murciélago hindú comía feliz cardillo y kiwi.",
-            'de-DE': "Zwölf Boxkämpfer jagen Viktor quer über den großen Sylter Deich.",
-            'nl-NL': "De snelle bruine vos springt over de luie hond.",
-            'ja-JP': "いろはにほへとちりぬるを。"
-        };
+		const testSentences = {
+			'en-US': "How can I improve my English pronunciation?",
+			'en-GB': "It's important to drink water regularly throughout the day.",
+			'en-AU': "What time does the next bus arrive at the station?",
+			'es-ES': "¿Dónde puedo encontrar una farmacia cercana?",
+			'es-US': "¿Cuál es el mejor lugar para comer tacos en la ciudad?",
+			'de-DE': "Wie komme ich am besten zum Hauptbahnhof?",
+			'nl-NL': "Waar is de dichtstbijzijnde supermarkt?",
+			'ja-JP': "この近くにおいしいレストランはありますか？",
+			'pt-PT': "Qual é o caminho mais rápido para chegar ao centro da cidade?",
+			'pt-BR': "Qual é o caminho mais rápido para chegar ao centro da cidade?",
+			'fr-FR': "Pouvez-vous me recommander un bon café à proximité?",
+			'it-IT': "Qual è il miglior ristorante di questa zona?",
+			'tr-TR': "Hızlı kahverengi tilki tembel köpeğin üstünden atlar."
+		};
+
 
         const testText = testSentences[language] || "This is a test of the selected voice.";
         console.log(`Test sentence: "${testText}"`);
