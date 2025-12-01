@@ -21,7 +21,7 @@
   "license": "ISC",
   "description": "Text-to-Speech web application using Google Cloud TTS API",
   "dependencies": {
-    "@google-cloud/text-to-speech": "^5.4.0",
+    "@google-cloud/text-to-speech": "^6.4.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "multer": "^1.4.5-lts.1"
