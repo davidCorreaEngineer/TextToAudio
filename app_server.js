@@ -4,6 +4,7 @@ const textToSpeech = require('@google-cloud/text-to-speech');
 const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -14,7 +15,239 @@ const client = new textToSpeech.TextToSpeechClient({
 
 const MAX_TEXT_LENGTH = 5000; // Maximum allowed bytes
 
-app.use(cors());
+// =============================================================================
+// CONFIGURATION
+// =============================================================================
+
+// API Key Authentication
+// Set via environment variable or generate a secure default for first run
+// IMPORTANT: In production, always set TTS_API_KEY environment variable
+const API_KEY = process.env.TTS_API_KEY || null;
+
+// If no API key is configured, generate one and log it (first run only)
+if (!API_KEY) {
+    const generatedKey = crypto.randomBytes(32).toString('hex');
+    console.warn('='.repeat(70));
+    console.warn('WARNING: No API key configured!');
+    console.warn('Set the TTS_API_KEY environment variable for production use.');
+    console.warn(`Generated temporary key for this session: ${generatedKey}`);
+    console.warn('='.repeat(70));
+    // Store for this session
+    process.env.TTS_API_KEY = generatedKey;
+}
+
+const ACTIVE_API_KEY = process.env.TTS_API_KEY;
+
+// CORS Configuration
+// Set allowed origins via environment variable (comma-separated) or default to same-origin only
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+    : [];  // Empty array = same-origin only (no cross-origin requests allowed)
+
+// Rate limiting: max requests per IP per window
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 10;     // 10 requests per minute per IP
+
+// Quota limits (monthly) - same as client-side FREE_TIER_LIMITS
+const QUOTA_LIMITS = {
+    'Neural2': 1000000,      // 1 million bytes
+    'Studio': 100000,        // 100,000 bytes
+    'Polyglot': 100000,      // 100,000 bytes
+    'Standard': 4000000,     // 4 million characters
+    'WaveNet': 1000000,      // 1 million characters
+    'Journey': 1000000       // 1 million bytes
+};
+
+// File cleanup: delete audio files older than this
+const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+// =============================================================================
+// SECURITY: API KEY AUTHENTICATION
+// =============================================================================
+
+function apiKeyAuthMiddleware(req, res, next) {
+    // Check for API key in header (preferred) or query parameter (fallback)
+    const providedKey = req.headers['x-api-key'] || req.query.apiKey;
+
+    if (!providedKey) {
+        return res.status(401).json({
+            success: false,
+            error: 'Authentication required. Provide API key via X-API-Key header.'
+        });
+    }
+
+    // Constant-time comparison to prevent timing attacks
+    if (!crypto.timingSafeEqual(Buffer.from(providedKey), Buffer.from(ACTIVE_API_KEY))) {
+        return res.status(403).json({
+            success: false,
+            error: 'Invalid API key.'
+        });
+    }
+
+    next();
+}
+
+// =============================================================================
+// SECURITY: ERROR SANITIZATION
+// =============================================================================
+
+// Known safe error patterns that can be shown to users
+const SAFE_ERROR_PATTERNS = [
+    /No text provided/i,
+    /Text is too long/i,
+    /No file uploaded/i,
+    /Rate limit exceeded/i,
+    /Monthly quota exceeded/i,
+    /Invalid API key/i,
+    /Authentication required/i,
+];
+
+function sanitizeError(error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Check if this is a known safe error message
+    for (const pattern of SAFE_ERROR_PATTERNS) {
+        if (pattern.test(message)) {
+            return message;
+        }
+    }
+
+    // For Google API errors, extract only the safe part
+    if (message.includes('INVALID_ARGUMENT')) {
+        return 'Invalid request parameters. Please check your input.';
+    }
+    if (message.includes('PERMISSION_DENIED')) {
+        return 'Service configuration error. Please contact the administrator.';
+    }
+    if (message.includes('RESOURCE_EXHAUSTED')) {
+        return 'Service quota exceeded. Please try again later.';
+    }
+
+    // Log the actual error for debugging (server-side only)
+    console.error('Sanitized error (original):', message);
+
+    // Return generic error to client
+    return 'An unexpected error occurred. Please try again.';
+}
+
+// Helper to send sanitized error responses
+function sendError(res, statusCode, error) {
+    return res.status(statusCode).json({
+        success: false,
+        error: sanitizeError(error)
+    });
+}
+
+// =============================================================================
+// RATE LIMITING
+// =============================================================================
+
+const rateLimitStore = new Map(); // IP -> { count, resetTime }
+
+function rateLimitMiddleware(req, res, next) {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+
+    let record = rateLimitStore.get(ip);
+
+    // Clean up or create new record if expired
+    if (!record || now > record.resetTime) {
+        record = { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
+        rateLimitStore.set(ip, record);
+    }
+
+    record.count++;
+
+    if (record.count > RATE_LIMIT_MAX_REQUESTS) {
+        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+        res.set('Retry-After', retryAfter);
+        return res.status(429).json({
+            success: false,
+            error: `Rate limit exceeded. Try again in ${retryAfter} seconds.`
+        });
+    }
+
+    next();
+}
+
+// Periodically clean up old entries from rate limit store (every 5 minutes)
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of rateLimitStore.entries()) {
+        if (now > record.resetTime) {
+            rateLimitStore.delete(ip);
+        }
+    }
+}, 5 * 60 * 1000);
+
+// =============================================================================
+// FILE CLEANUP
+// =============================================================================
+
+async function cleanupOldAudioFiles() {
+    try {
+        const publicDir = path.join(__dirname, 'public');
+        const files = await fs.readdir(publicDir);
+        const now = Date.now();
+
+        for (const file of files) {
+            if (!file.endsWith('_audio.mp3')) continue;
+
+            const filePath = path.join(publicDir, file);
+            try {
+                const stats = await fs.stat(filePath);
+                const age = now - stats.mtimeMs;
+
+                if (age > AUDIO_FILE_MAX_AGE_MS) {
+                    await fs.unlink(filePath);
+                    console.log(`Cleaned up old audio file: ${file}`);
+                }
+            } catch (err) {
+                // File may have been deleted already, ignore
+            }
+        }
+    } catch (error) {
+        console.error('Error during audio file cleanup:', error);
+    }
+}
+
+// Run cleanup every 10 minutes
+setInterval(cleanupOldAudioFiles, 10 * 60 * 1000);
+
+// Run cleanup once on startup
+cleanupOldAudioFiles();
+
+// =============================================================================
+// MIDDLEWARE
+// =============================================================================
+
+// CORS with restricted origins
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (same-origin, Postman, curl, etc.)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        // Check if origin is in the allowed list
+        if (ALLOWED_ORIGINS.length === 0) {
+            // No origins configured = reject all cross-origin requests
+            return callback(new Error('Cross-origin requests not allowed'), false);
+        }
+
+        if (ALLOWED_ORIGINS.includes(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error('Origin not allowed by CORS policy'), false);
+    },
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'X-API-Key'],
+    credentials: false,
+    maxAge: 86400 // Cache preflight for 24 hours
+};
+
+app.use(cors(corsOptions));
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -53,44 +286,95 @@ function countBytes(text) {
     return Buffer.byteLength(text, 'utf8');
 }
 
-// **4. Update Quota Function**
-async function updateQuota(voiceType, count) {
-    const quotaFile = path.join(__dirname, 'quota.json');
-    let quota = {};
+// **4. Mutex for Quota Updates (prevents race conditions)**
+let quotaLock = Promise.resolve();
 
+// **5. Update Quota Function with Mutex Lock**
+async function updateQuota(voiceType, count) {
+    // Acquire lock by chaining onto the previous operation
+    const releaseLock = new Promise(resolve => {
+        quotaLock = quotaLock.then(async () => {
+            const quotaFile = path.join(__dirname, 'quota.json');
+            let quota = {};
+
+            try {
+                const data = await fs.readFile(quotaFile, 'utf8');
+                quota = JSON.parse(data);
+                console.log("Quota data loaded:", quota);
+            } catch (error) {
+                // File doesn't exist or is empty, start with an empty object
+                console.log("Quota file not found or empty. Starting fresh.");
+            }
+
+            const currentDate = new Date();
+            const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+
+            if (!quota[yearMonth]) {
+                quota[yearMonth] = {};
+            }
+
+            if (!quota[yearMonth][voiceType]) {
+                quota[yearMonth][voiceType] = 0;
+            }
+
+            quota[yearMonth][voiceType] += count;
+
+            await fs.writeFile(quotaFile, JSON.stringify(quota, null, 2));
+            console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
+            resolve();
+        });
+    });
+
+    await releaseLock;
+}
+
+// **6. Check Quota Before API Call**
+async function checkQuotaAllows(voiceType, requestedCount) {
+    const quotaFile = path.join(__dirname, 'quota.json');
+    const limit = QUOTA_LIMITS[voiceType];
+
+    // If no limit defined for this voice type, allow (but log warning)
+    if (limit === undefined) {
+        console.warn(`No quota limit defined for voice type: ${voiceType}`);
+        return { allowed: true };
+    }
+
+    let quota = {};
     try {
         const data = await fs.readFile(quotaFile, 'utf8');
         quota = JSON.parse(data);
-        console.log("Quota data loaded:", quota);
     } catch (error) {
-        // File doesn't exist or is empty, start with an empty object
-        console.log("Quota file not found or empty. Starting fresh.");
+        // File doesn't exist, no usage yet
+        return { allowed: true, currentUsage: 0, limit };
     }
 
     const currentDate = new Date();
     const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
-    if (!quota[yearMonth]) {
-        quota[yearMonth] = {};
+    const currentUsage = (quota[yearMonth] && quota[yearMonth][voiceType]) || 0;
+    const projectedUsage = currentUsage + requestedCount;
+
+    if (projectedUsage > limit) {
+        return {
+            allowed: false,
+            currentUsage,
+            limit,
+            requested: requestedCount,
+            remaining: Math.max(0, limit - currentUsage)
+        };
     }
 
-    if (!quota[yearMonth][voiceType]) {
-        quota[yearMonth][voiceType] = 0;
-    }
-
-    quota[yearMonth][voiceType] += count;
-
-    await fs.writeFile(quotaFile, JSON.stringify(quota, null, 2));
-    console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
+    return { allowed: true, currentUsage, limit };
 }
 
-// **5. Root Route**
+// **7. Root Route**
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// **6. Voices Endpoint**
-app.get('/voices', async (req, res) => {
+// **8. Voices Endpoint**
+// Protected by API key authentication
+app.get('/voices', apiKeyAuthMiddleware, async (req, res) => {
     try {
         console.log('Fetching voices from Google TTS API...');
         const [result] = await client.listVoices({});
@@ -99,7 +383,7 @@ app.get('/voices', async (req, res) => {
         // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English, French, Italian, Portuguese and Portuguese
 		const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
 
-        const voices = result.voices.filter(voice => 
+        const voices = result.voices.filter(voice =>
             voice.languageCodes.some(code => supportedLanguages.includes(code))
         );
 
@@ -108,16 +392,17 @@ app.get('/voices', async (req, res) => {
         res.json(voices);
     } catch (error) {
         console.error("Error fetching voices:", error);
-        res.status(500).json({ error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **7. Test Voice Endpoint (Do Not Save Audio Files)**
-app.post('/test-voice', express.json(), async (req, res) => {
+// **9. Test Voice Endpoint (Do Not Save Audio Files)**
+// Protected by API key authentication and rate limited
+app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(), async (req, res) => {
     try {
         const { language, voice, speakingRate, pitch } = req.body;
         console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}`);
-        
+
 		const testSentences = {
 			'en-US': "How can I improve my English pronunciation?",
 			'en-GB': "It's important to drink water regularly throughout the day.",
@@ -141,7 +426,7 @@ app.post('/test-voice', express.json(), async (req, res) => {
         const request = {
             input: { text: testText },
             voice: { languageCode: language, name: voice },
-            audioConfig: { 
+            audioConfig: {
                 audioEncoding: 'MP3',
                 speakingRate: parseFloat(speakingRate) || 1.0,
                 pitch: parseFloat(pitch) || 0.0
@@ -157,16 +442,17 @@ app.post('/test-voice', express.json(), async (req, res) => {
         console.log("Test voice audio data sent to client.");
     } catch (error) {
         console.error("Error testing voice:", error);
-        res.status(500).json({ success: false, error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **8. Check File Size Endpoint**
-app.post('/check-file-size', upload.single('textFile'), async (req, res) => {
+// **10. Check File Size Endpoint**
+// Protected by API key authentication
+app.post('/check-file-size', apiKeyAuthMiddleware, upload.single('textFile'), async (req, res) => {
     try {
         if (!req.file) {
             console.log("No file uploaded for size check.");
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ success: false, error: 'No file uploaded.' });
         }
         const stats = await fs.stat(req.file.path);
         const fileSizeInBytes = stats.size;
@@ -175,12 +461,13 @@ app.post('/check-file-size', upload.single('textFile'), async (req, res) => {
         res.json({ byteLength: fileSizeInBytes });
     } catch (error) {
         console.error("Error checking file size:", error);
-        res.status(500).json({ error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **9. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
-app.post('/synthesize', upload.none(), async (req, res) => {
+// **11. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
+// Protected by API key authentication and rate limited
+app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none(), async (req, res) => {
     try {
         let text = req.body.textContent || '';
         const language = req.body.language;
@@ -205,29 +492,60 @@ app.post('/synthesize', upload.none(), async (req, res) => {
             input = { text: text };
         }
 
-        // **Adjust Character Counting for Quota**
-        let count;
-        if (useSsml) {
-            count = countCharactersInSsml(text);
-        } else {
-            count = countCharacters(text);
-        }
+        // **Determine voice category first for correct quota counting**
+        const voiceCategory = getVoiceCategory(voice);
 
-        console.log(`Character count for quota: ${count}`);
+        // **Adjust Counting for Quota Based on Voice Type**
+        // Neural2, Studio, Polyglot, and Journey are billed by bytes
+        // Standard and WaveNet are billed by characters
+        const byteBasedVoices = ['Neural2', 'Studio', 'Polyglot', 'Journey'];
+        let count;
+
+        if (byteBasedVoices.includes(voiceCategory)) {
+            // Count bytes for byte-based voices
+            if (useSsml) {
+                count = countBytes(countCharactersInSsmlText(text));
+            } else {
+                count = countBytes(text);
+            }
+            console.log(`Byte count for quota (${voiceCategory}): ${count}`);
+        } else {
+            // Count characters for character-based voices (Standard, WaveNet)
+            if (useSsml) {
+                count = countCharactersInSsml(text);
+            } else {
+                count = countCharacters(text);
+            }
+            console.log(`Character count for quota (${voiceCategory}): ${count}`);
+        }
 
         // **Check Text Length**
         if (count > MAX_TEXT_LENGTH) {
             console.log(`Text exceeds maximum allowed size of ${MAX_TEXT_LENGTH} characters.`);
-            return res.status(400).json({ 
-                success: false, 
+            return res.status(400).json({
+                success: false,
                 error: `Text is too long (${count} characters). Maximum allowed is ${MAX_TEXT_LENGTH} characters.`
+            });
+        }
+
+        // **Check Quota BEFORE Making API Call**
+        const quotaCheck = await checkQuotaAllows(voiceCategory, count);
+        if (!quotaCheck.allowed) {
+            const unit = byteBasedVoices.includes(voiceCategory) ? 'bytes' : 'characters';
+            console.log(`Quota exceeded for ${voiceCategory}: ${quotaCheck.currentUsage}/${quotaCheck.limit} ${unit}`);
+            return res.status(429).json({
+                success: false,
+                error: `Monthly quota exceeded for ${voiceCategory} voices. ` +
+                       `Used: ${quotaCheck.currentUsage.toLocaleString()} / ${quotaCheck.limit.toLocaleString()} ${unit}. ` +
+                       `Remaining: ${quotaCheck.remaining.toLocaleString()} ${unit}. ` +
+                       `Try a shorter text or different voice type.`
             });
         }
 
         const request = {
             input: input,
             voice: { languageCode: language, name: voice },
-            audioConfig: { 
+            audioConfig: {
                 audioEncoding: 'MP3',
                 speakingRate: speakingRate,
                 pitch: pitch
@@ -237,16 +555,14 @@ app.post('/synthesize', upload.none(), async (req, res) => {
         const [response] = await client.synthesizeSpeech(request);
         console.log("Audio synthesized successfully.");
 
-        // Determine voice type and count
-        const voiceCategory = getVoiceCategory(voice);
-
-        // Update quota
+        // Update quota (voiceCategory already determined above)
         await updateQuota(voiceCategory, count);
         console.log("Quota updated.");
 
-        // Generate the output filename based on the original file name
+        // Generate unique output filename based on the original file name
         const sanitizedFileName = path.parse(originalFileName).name.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
-        const outputFileName = `${sanitizedFileName}_audio.mp3`;
+        const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const outputFileName = `${sanitizedFileName}_${uniqueId}_audio.mp3`;
         const outputFile = path.join(__dirname, 'public', outputFileName);
 
         await fs.writeFile(outputFile, response.audioContent, 'binary');
@@ -256,12 +572,13 @@ app.post('/synthesize', upload.none(), async (req, res) => {
         console.log("Synthesize response sent to client.");
     } catch (error) {
         console.error("Error generating speech:", error);
-        res.status(500).json({ success: false, error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **10. Dashboard Endpoint**
-app.get('/dashboard', async (req, res) => {
+// **12. Dashboard Endpoint**
+// Protected by API key authentication
+app.get('/dashboard', apiKeyAuthMiddleware, async (req, res) => {
     try {
         const quotaFile = path.join(__dirname, 'quota.json');
         let quota = {};
@@ -278,7 +595,7 @@ app.get('/dashboard', async (req, res) => {
         console.log("Quota data sent to dashboard.");
     } catch (error) {
         console.error("Error fetching quota for dashboard:", error);
-        res.status(500).json({ error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
@@ -287,6 +604,12 @@ function countCharactersInSsml(ssmlText) {
     // Remove SSML tags
     const strippedText = ssmlText.replace(/<[^>]+>/g, '');
     return strippedText.length;
+}
+
+// **Function to Extract Text from SSML (for byte counting)**
+function countCharactersInSsmlText(ssmlText) {
+    // Remove SSML tags and return the plain text
+    return ssmlText.replace(/<[^>]+>/g, '');
 }
 
 const PORT = process.env.PORT || 3000;
