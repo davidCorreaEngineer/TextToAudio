@@ -40,9 +40,14 @@ const ACTIVE_API_KEY = process.env.TTS_API_KEY;
 
 // CORS Configuration
 // Set allowed origins via environment variable (comma-separated) or default to same-origin only
-const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
-    : [];  // Empty array = same-origin only (no cross-origin requests allowed)
+// Use "*" to allow all origins (not recommended for production)
+const CORS_ORIGINS_RAW = process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS || '';
+const ALLOW_ALL_ORIGINS = CORS_ORIGINS_RAW.trim() === '*';
+const ALLOWED_ORIGINS = ALLOW_ALL_ORIGINS
+    ? []
+    : CORS_ORIGINS_RAW
+        ? CORS_ORIGINS_RAW.split(',').map(origin => origin.trim())
+        : [];  // Empty array = same-origin only (no cross-origin requests allowed)
 
 // Rate limiting: max requests per IP per window
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
@@ -226,6 +231,11 @@ const corsOptions = {
     origin: function (origin, callback) {
         // Allow requests with no origin (same-origin, Postman, curl, etc.)
         if (!origin) {
+            return callback(null, true);
+        }
+
+        // Allow all origins if configured with "*"
+        if (ALLOW_ALL_ORIGINS) {
             return callback(null, true);
         }
 
