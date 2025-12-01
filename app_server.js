@@ -4,6 +4,7 @@ const textToSpeech = require('@google-cloud/text-to-speech');
 const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -17,6 +18,31 @@ const MAX_TEXT_LENGTH = 5000; // Maximum allowed bytes
 // =============================================================================
 // CONFIGURATION
 // =============================================================================
+
+// API Key Authentication
+// Set via environment variable or generate a secure default for first run
+// IMPORTANT: In production, always set TTS_API_KEY environment variable
+const API_KEY = process.env.TTS_API_KEY || null;
+
+// If no API key is configured, generate one and log it (first run only)
+if (!API_KEY) {
+    const generatedKey = crypto.randomBytes(32).toString('hex');
+    console.warn('='.repeat(70));
+    console.warn('WARNING: No API key configured!');
+    console.warn('Set the TTS_API_KEY environment variable for production use.');
+    console.warn(`Generated temporary key for this session: ${generatedKey}`);
+    console.warn('='.repeat(70));
+    // Store for this session
+    process.env.TTS_API_KEY = generatedKey;
+}
+
+const ACTIVE_API_KEY = process.env.TTS_API_KEY;
+
+// CORS Configuration
+// Set allowed origins via environment variable (comma-separated) or default to same-origin only
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+    : [];  // Empty array = same-origin only (no cross-origin requests allowed)
 
 // Rate limiting: max requests per IP per window
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
@@ -34,6 +60,83 @@ const QUOTA_LIMITS = {
 
 // File cleanup: delete audio files older than this
 const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+// =============================================================================
+// SECURITY: API KEY AUTHENTICATION
+// =============================================================================
+
+function apiKeyAuthMiddleware(req, res, next) {
+    // Check for API key in header (preferred) or query parameter (fallback)
+    const providedKey = req.headers['x-api-key'] || req.query.apiKey;
+
+    if (!providedKey) {
+        return res.status(401).json({
+            success: false,
+            error: 'Authentication required. Provide API key via X-API-Key header.'
+        });
+    }
+
+    // Constant-time comparison to prevent timing attacks
+    if (!crypto.timingSafeEqual(Buffer.from(providedKey), Buffer.from(ACTIVE_API_KEY))) {
+        return res.status(403).json({
+            success: false,
+            error: 'Invalid API key.'
+        });
+    }
+
+    next();
+}
+
+// =============================================================================
+// SECURITY: ERROR SANITIZATION
+// =============================================================================
+
+// Known safe error patterns that can be shown to users
+const SAFE_ERROR_PATTERNS = [
+    /No text provided/i,
+    /Text is too long/i,
+    /No file uploaded/i,
+    /Rate limit exceeded/i,
+    /Monthly quota exceeded/i,
+    /Invalid API key/i,
+    /Authentication required/i,
+];
+
+function sanitizeError(error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Check if this is a known safe error message
+    for (const pattern of SAFE_ERROR_PATTERNS) {
+        if (pattern.test(message)) {
+            return message;
+        }
+    }
+
+    // For Google API errors, extract only the safe part
+    if (message.includes('INVALID_ARGUMENT')) {
+        return 'Invalid request parameters. Please check your input.';
+    }
+    if (message.includes('PERMISSION_DENIED')) {
+        return 'Service configuration error. Please contact the administrator.';
+    }
+    if (message.includes('RESOURCE_EXHAUSTED')) {
+        return 'Service quota exceeded. Please try again later.';
+    }
+
+    // Log the actual error for debugging (server-side only)
+    console.error('Sanitized error (original):', message);
+
+    // Return generic error to client
+    return 'An unexpected error occurred. Please try again.';
+}
+
+// Helper to send sanitized error responses
+function sendError(res, statusCode, error) {
+    return res.status(statusCode).json({
+        success: false,
+        error: sanitizeError(error)
+    });
+}
 
 // =============================================================================
 // RATE LIMITING
@@ -118,7 +221,33 @@ cleanupOldAudioFiles();
 // MIDDLEWARE
 // =============================================================================
 
-app.use(cors());
+// CORS with restricted origins
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (same-origin, Postman, curl, etc.)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        // Check if origin is in the allowed list
+        if (ALLOWED_ORIGINS.length === 0) {
+            // No origins configured = reject all cross-origin requests
+            return callback(new Error('Cross-origin requests not allowed'), false);
+        }
+
+        if (ALLOWED_ORIGINS.includes(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error('Origin not allowed by CORS policy'), false);
+    },
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'X-API-Key'],
+    credentials: false,
+    maxAge: 86400 // Cache preflight for 24 hours
+};
+
+app.use(cors(corsOptions));
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -243,8 +372,9 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// **6. Voices Endpoint**
-app.get('/voices', async (req, res) => {
+// **8. Voices Endpoint**
+// Protected by API key authentication
+app.get('/voices', apiKeyAuthMiddleware, async (req, res) => {
     try {
         console.log('Fetching voices from Google TTS API...');
         const [result] = await client.listVoices({});
@@ -253,7 +383,7 @@ app.get('/voices', async (req, res) => {
         // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English, French, Italian, Portuguese and Portuguese
 		const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
 
-        const voices = result.voices.filter(voice => 
+        const voices = result.voices.filter(voice =>
             voice.languageCodes.some(code => supportedLanguages.includes(code))
         );
 
@@ -262,17 +392,17 @@ app.get('/voices', async (req, res) => {
         res.json(voices);
     } catch (error) {
         console.error("Error fetching voices:", error);
-        res.status(500).json({ error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **8. Test Voice Endpoint (Do Not Save Audio Files)**
-// Rate limited to prevent API abuse
-app.post('/test-voice', rateLimitMiddleware, express.json(), async (req, res) => {
+// **9. Test Voice Endpoint (Do Not Save Audio Files)**
+// Protected by API key authentication and rate limited
+app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(), async (req, res) => {
     try {
         const { language, voice, speakingRate, pitch } = req.body;
         console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}`);
-        
+
 		const testSentences = {
 			'en-US': "How can I improve my English pronunciation?",
 			'en-GB': "It's important to drink water regularly throughout the day.",
@@ -296,7 +426,7 @@ app.post('/test-voice', rateLimitMiddleware, express.json(), async (req, res) =>
         const request = {
             input: { text: testText },
             voice: { languageCode: language, name: voice },
-            audioConfig: { 
+            audioConfig: {
                 audioEncoding: 'MP3',
                 speakingRate: parseFloat(speakingRate) || 1.0,
                 pitch: parseFloat(pitch) || 0.0
@@ -312,16 +442,17 @@ app.post('/test-voice', rateLimitMiddleware, express.json(), async (req, res) =>
         console.log("Test voice audio data sent to client.");
     } catch (error) {
         console.error("Error testing voice:", error);
-        res.status(500).json({ success: false, error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **8. Check File Size Endpoint**
-app.post('/check-file-size', upload.single('textFile'), async (req, res) => {
+// **10. Check File Size Endpoint**
+// Protected by API key authentication
+app.post('/check-file-size', apiKeyAuthMiddleware, upload.single('textFile'), async (req, res) => {
     try {
         if (!req.file) {
             console.log("No file uploaded for size check.");
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ success: false, error: 'No file uploaded.' });
         }
         const stats = await fs.stat(req.file.path);
         const fileSizeInBytes = stats.size;
@@ -330,13 +461,13 @@ app.post('/check-file-size', upload.single('textFile'), async (req, res) => {
         res.json({ byteLength: fileSizeInBytes });
     } catch (error) {
         console.error("Error checking file size:", error);
-        res.status(500).json({ error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **10. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
-// Rate limited to prevent API abuse
-app.post('/synthesize', rateLimitMiddleware, upload.none(), async (req, res) => {
+// **11. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
+// Protected by API key authentication and rate limited
+app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none(), async (req, res) => {
     try {
         let text = req.body.textContent || '';
         const language = req.body.language;
@@ -441,12 +572,13 @@ app.post('/synthesize', rateLimitMiddleware, upload.none(), async (req, res) => 
         console.log("Synthesize response sent to client.");
     } catch (error) {
         console.error("Error generating speech:", error);
-        res.status(500).json({ success: false, error: error.message });
+        return sendError(res, 500, error);
     }
 });
 
-// **10. Dashboard Endpoint**
-app.get('/dashboard', async (req, res) => {
+// **12. Dashboard Endpoint**
+// Protected by API key authentication
+app.get('/dashboard', apiKeyAuthMiddleware, async (req, res) => {
     try {
         const quotaFile = path.join(__dirname, 'quota.json');
         let quota = {};
@@ -463,7 +595,7 @@ app.get('/dashboard', async (req, res) => {
         console.log("Quota data sent to dashboard.");
     } catch (error) {
         console.error("Error fetching quota for dashboard:", error);
-        res.status(500).json({ error: error.message });
+        return sendError(res, 500, error);
     }
 });
 

@@ -1,5 +1,47 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log("app_client.js loaded and DOMContentLoaded event fired.");
+
+    // ==========================================================================
+    // API KEY CONFIGURATION
+    // ==========================================================================
+    // The API key should be provided by the server or configured here.
+    // In production, consider injecting this via a secure mechanism.
+    //
+    // Option 1: Set it directly (for development/single-user deployments)
+    // Option 2: Prompt user for API key on first use
+    // Option 3: Have server inject it into the page for authenticated sessions
+    //
+    // For now, we'll check localStorage or prompt the user.
+    // ==========================================================================
+
+    let API_KEY = localStorage.getItem('tts_api_key') || '';
+
+    // If no API key stored, prompt the user
+    if (!API_KEY) {
+        API_KEY = prompt('Please enter your API key to use this application:');
+        if (API_KEY) {
+            localStorage.setItem('tts_api_key', API_KEY);
+        }
+    }
+
+    // Helper function to get headers with API key
+    function getAuthHeaders(additionalHeaders = {}) {
+        return {
+            'X-API-Key': API_KEY,
+            ...additionalHeaders
+        };
+    }
+
+    // Function to clear stored API key (for logout or key change)
+    window.clearApiKey = function() {
+        localStorage.removeItem('tts_api_key');
+        location.reload();
+    };
+
+    // ==========================================================================
+    // DOM ELEMENTS
+    // ==========================================================================
+
     const form = document.getElementById('ttsForm');
     const languageSelect = document.getElementById('language');
     const voiceSelect = document.getElementById('voice');
@@ -48,7 +90,14 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Loading voices...");
         try {
             console.log('Fetching voices from server...');
-            const response = await fetch('/voices');
+            const response = await fetch('/voices', {
+                headers: getAuthHeaders()
+            });
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('tts_api_key');
+                resultDiv.innerHTML = '<p class="text-danger">Invalid API key. Please reload and enter a valid key.</p>';
+                return;
+            }
             if (!response.ok) {
                 throw new Error('Failed to fetch voices');
             }
@@ -177,10 +226,15 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const response = await fetch('/test-voice', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ language, voice, speakingRate, pitch })
             });
 
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('tts_api_key');
+                resultDiv.innerHTML = '<p class="text-danger">Invalid API key. Please reload and enter a valid key.</p>';
+                return;
+            }
             if (!response.ok) {
                 throw new Error('Failed to test voice');
             }
@@ -255,6 +309,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/synthesize', true);
 
+            // Set API key header for authentication
+            xhr.setRequestHeader('X-API-Key', API_KEY);
+
             // **9. Update Progress Bar Based on Upload Progress**
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable) {
@@ -266,6 +323,12 @@ document.addEventListener('DOMContentLoaded', function() {
             };
 
             xhr.onload = function() {
+                if (xhr.status === 401 || xhr.status === 403) {
+                    localStorage.removeItem('tts_api_key');
+                    resultDiv.innerHTML = '<p class="text-danger">Invalid API key. Please reload and enter a valid key.</p>';
+                    progressContainer.style.display = 'none';
+                    return;
+                }
                 if (xhr.status === 200) {
                     const result = JSON.parse(xhr.responseText);
                     if (result.success) {
@@ -276,7 +339,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log("Error generating audio:", result.error);
                     }
                 } else {
-                    resultDiv.innerHTML = '<p class="text-danger">Error generating audio. Please try again.</p>';
+                    const result = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+                    resultDiv.innerHTML = `<p class="text-danger">Error: ${result.error || 'Error generating audio. Please try again.'}</p>`;
                     console.log("Error generating audio. Status:", xhr.status);
                 }
                 // Hide Progress Bar after completion
@@ -342,7 +406,14 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchUsageStats() {
         console.log("Fetching usage statistics for dashboard...");
         try {
-            const response = await fetch('/dashboard');
+            const response = await fetch('/dashboard', {
+                headers: getAuthHeaders()
+            });
+            if (response.status === 401 || response.status === 403) {
+                // Don't show error for dashboard if auth fails - voices endpoint will handle it
+                console.log("Dashboard fetch failed due to authentication.");
+                return;
+            }
             if (!response.ok) {
                 throw new Error('Failed to fetch usage statistics');
             }
