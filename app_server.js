@@ -14,6 +14,110 @@ const client = new textToSpeech.TextToSpeechClient({
 
 const MAX_TEXT_LENGTH = 5000; // Maximum allowed bytes
 
+// =============================================================================
+// CONFIGURATION
+// =============================================================================
+
+// Rate limiting: max requests per IP per window
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 10;     // 10 requests per minute per IP
+
+// Quota limits (monthly) - same as client-side FREE_TIER_LIMITS
+const QUOTA_LIMITS = {
+    'Neural2': 1000000,      // 1 million bytes
+    'Studio': 100000,        // 100,000 bytes
+    'Polyglot': 100000,      // 100,000 bytes
+    'Standard': 4000000,     // 4 million characters
+    'WaveNet': 1000000,      // 1 million characters
+    'Journey': 1000000       // 1 million bytes
+};
+
+// File cleanup: delete audio files older than this
+const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+// =============================================================================
+// RATE LIMITING
+// =============================================================================
+
+const rateLimitStore = new Map(); // IP -> { count, resetTime }
+
+function rateLimitMiddleware(req, res, next) {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+
+    let record = rateLimitStore.get(ip);
+
+    // Clean up or create new record if expired
+    if (!record || now > record.resetTime) {
+        record = { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
+        rateLimitStore.set(ip, record);
+    }
+
+    record.count++;
+
+    if (record.count > RATE_LIMIT_MAX_REQUESTS) {
+        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+        res.set('Retry-After', retryAfter);
+        return res.status(429).json({
+            success: false,
+            error: `Rate limit exceeded. Try again in ${retryAfter} seconds.`
+        });
+    }
+
+    next();
+}
+
+// Periodically clean up old entries from rate limit store (every 5 minutes)
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of rateLimitStore.entries()) {
+        if (now > record.resetTime) {
+            rateLimitStore.delete(ip);
+        }
+    }
+}, 5 * 60 * 1000);
+
+// =============================================================================
+// FILE CLEANUP
+// =============================================================================
+
+async function cleanupOldAudioFiles() {
+    try {
+        const publicDir = path.join(__dirname, 'public');
+        const files = await fs.readdir(publicDir);
+        const now = Date.now();
+
+        for (const file of files) {
+            if (!file.endsWith('_audio.mp3')) continue;
+
+            const filePath = path.join(publicDir, file);
+            try {
+                const stats = await fs.stat(filePath);
+                const age = now - stats.mtimeMs;
+
+                if (age > AUDIO_FILE_MAX_AGE_MS) {
+                    await fs.unlink(filePath);
+                    console.log(`Cleaned up old audio file: ${file}`);
+                }
+            } catch (err) {
+                // File may have been deleted already, ignore
+            }
+        }
+    } catch (error) {
+        console.error('Error during audio file cleanup:', error);
+    }
+}
+
+// Run cleanup every 10 minutes
+setInterval(cleanupOldAudioFiles, 10 * 60 * 1000);
+
+// Run cleanup once on startup
+cleanupOldAudioFiles();
+
+// =============================================================================
+// MIDDLEWARE
+// =============================================================================
+
 app.use(cors());
 app.use(express.static('public'));
 app.use(express.json());
@@ -95,7 +199,46 @@ async function updateQuota(voiceType, count) {
     await releaseLock;
 }
 
-// **5. Root Route**
+// **6. Check Quota Before API Call**
+async function checkQuotaAllows(voiceType, requestedCount) {
+    const quotaFile = path.join(__dirname, 'quota.json');
+    const limit = QUOTA_LIMITS[voiceType];
+
+    // If no limit defined for this voice type, allow (but log warning)
+    if (limit === undefined) {
+        console.warn(`No quota limit defined for voice type: ${voiceType}`);
+        return { allowed: true };
+    }
+
+    let quota = {};
+    try {
+        const data = await fs.readFile(quotaFile, 'utf8');
+        quota = JSON.parse(data);
+    } catch (error) {
+        // File doesn't exist, no usage yet
+        return { allowed: true, currentUsage: 0, limit };
+    }
+
+    const currentDate = new Date();
+    const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+
+    const currentUsage = (quota[yearMonth] && quota[yearMonth][voiceType]) || 0;
+    const projectedUsage = currentUsage + requestedCount;
+
+    if (projectedUsage > limit) {
+        return {
+            allowed: false,
+            currentUsage,
+            limit,
+            requested: requestedCount,
+            remaining: Math.max(0, limit - currentUsage)
+        };
+    }
+
+    return { allowed: true, currentUsage, limit };
+}
+
+// **7. Root Route**
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -123,8 +266,9 @@ app.get('/voices', async (req, res) => {
     }
 });
 
-// **7. Test Voice Endpoint (Do Not Save Audio Files)**
-app.post('/test-voice', express.json(), async (req, res) => {
+// **8. Test Voice Endpoint (Do Not Save Audio Files)**
+// Rate limited to prevent API abuse
+app.post('/test-voice', rateLimitMiddleware, express.json(), async (req, res) => {
     try {
         const { language, voice, speakingRate, pitch } = req.body;
         console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}`);
@@ -190,8 +334,9 @@ app.post('/check-file-size', upload.single('textFile'), async (req, res) => {
     }
 });
 
-// **9. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
-app.post('/synthesize', upload.none(), async (req, res) => {
+// **10. Synthesize Endpoint (Name Audio Files Based on Original Text File)**
+// Rate limited to prevent API abuse
+app.post('/synthesize', rateLimitMiddleware, upload.none(), async (req, res) => {
     try {
         let text = req.body.textContent || '';
         const language = req.body.language;
@@ -246,16 +391,30 @@ app.post('/synthesize', upload.none(), async (req, res) => {
         // **Check Text Length**
         if (count > MAX_TEXT_LENGTH) {
             console.log(`Text exceeds maximum allowed size of ${MAX_TEXT_LENGTH} characters.`);
-            return res.status(400).json({ 
-                success: false, 
+            return res.status(400).json({
+                success: false,
                 error: `Text is too long (${count} characters). Maximum allowed is ${MAX_TEXT_LENGTH} characters.`
+            });
+        }
+
+        // **Check Quota BEFORE Making API Call**
+        const quotaCheck = await checkQuotaAllows(voiceCategory, count);
+        if (!quotaCheck.allowed) {
+            const unit = byteBasedVoices.includes(voiceCategory) ? 'bytes' : 'characters';
+            console.log(`Quota exceeded for ${voiceCategory}: ${quotaCheck.currentUsage}/${quotaCheck.limit} ${unit}`);
+            return res.status(429).json({
+                success: false,
+                error: `Monthly quota exceeded for ${voiceCategory} voices. ` +
+                       `Used: ${quotaCheck.currentUsage.toLocaleString()} / ${quotaCheck.limit.toLocaleString()} ${unit}. ` +
+                       `Remaining: ${quotaCheck.remaining.toLocaleString()} ${unit}. ` +
+                       `Try a shorter text or different voice type.`
             });
         }
 
         const request = {
             input: input,
             voice: { languageCode: language, name: voice },
-            audioConfig: { 
+            audioConfig: {
                 audioEncoding: 'MP3',
                 speakingRate: speakingRate,
                 pitch: pitch
