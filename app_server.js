@@ -53,35 +53,46 @@ function countBytes(text) {
     return Buffer.byteLength(text, 'utf8');
 }
 
-// **4. Update Quota Function**
+// **4. Mutex for Quota Updates (prevents race conditions)**
+let quotaLock = Promise.resolve();
+
+// **5. Update Quota Function with Mutex Lock**
 async function updateQuota(voiceType, count) {
-    const quotaFile = path.join(__dirname, 'quota.json');
-    let quota = {};
+    // Acquire lock by chaining onto the previous operation
+    const releaseLock = new Promise(resolve => {
+        quotaLock = quotaLock.then(async () => {
+            const quotaFile = path.join(__dirname, 'quota.json');
+            let quota = {};
 
-    try {
-        const data = await fs.readFile(quotaFile, 'utf8');
-        quota = JSON.parse(data);
-        console.log("Quota data loaded:", quota);
-    } catch (error) {
-        // File doesn't exist or is empty, start with an empty object
-        console.log("Quota file not found or empty. Starting fresh.");
-    }
+            try {
+                const data = await fs.readFile(quotaFile, 'utf8');
+                quota = JSON.parse(data);
+                console.log("Quota data loaded:", quota);
+            } catch (error) {
+                // File doesn't exist or is empty, start with an empty object
+                console.log("Quota file not found or empty. Starting fresh.");
+            }
 
-    const currentDate = new Date();
-    const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            const currentDate = new Date();
+            const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
-    if (!quota[yearMonth]) {
-        quota[yearMonth] = {};
-    }
+            if (!quota[yearMonth]) {
+                quota[yearMonth] = {};
+            }
 
-    if (!quota[yearMonth][voiceType]) {
-        quota[yearMonth][voiceType] = 0;
-    }
+            if (!quota[yearMonth][voiceType]) {
+                quota[yearMonth][voiceType] = 0;
+            }
 
-    quota[yearMonth][voiceType] += count;
+            quota[yearMonth][voiceType] += count;
 
-    await fs.writeFile(quotaFile, JSON.stringify(quota, null, 2));
-    console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
+            await fs.writeFile(quotaFile, JSON.stringify(quota, null, 2));
+            console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
+            resolve();
+        });
+    });
+
+    await releaseLock;
 }
 
 // **5. Root Route**
@@ -205,15 +216,32 @@ app.post('/synthesize', upload.none(), async (req, res) => {
             input = { text: text };
         }
 
-        // **Adjust Character Counting for Quota**
-        let count;
-        if (useSsml) {
-            count = countCharactersInSsml(text);
-        } else {
-            count = countCharacters(text);
-        }
+        // **Determine voice category first for correct quota counting**
+        const voiceCategory = getVoiceCategory(voice);
 
-        console.log(`Character count for quota: ${count}`);
+        // **Adjust Counting for Quota Based on Voice Type**
+        // Neural2, Studio, Polyglot, and Journey are billed by bytes
+        // Standard and WaveNet are billed by characters
+        const byteBasedVoices = ['Neural2', 'Studio', 'Polyglot', 'Journey'];
+        let count;
+
+        if (byteBasedVoices.includes(voiceCategory)) {
+            // Count bytes for byte-based voices
+            if (useSsml) {
+                count = countBytes(countCharactersInSsmlText(text));
+            } else {
+                count = countBytes(text);
+            }
+            console.log(`Byte count for quota (${voiceCategory}): ${count}`);
+        } else {
+            // Count characters for character-based voices (Standard, WaveNet)
+            if (useSsml) {
+                count = countCharactersInSsml(text);
+            } else {
+                count = countCharacters(text);
+            }
+            console.log(`Character count for quota (${voiceCategory}): ${count}`);
+        }
 
         // **Check Text Length**
         if (count > MAX_TEXT_LENGTH) {
@@ -237,16 +265,14 @@ app.post('/synthesize', upload.none(), async (req, res) => {
         const [response] = await client.synthesizeSpeech(request);
         console.log("Audio synthesized successfully.");
 
-        // Determine voice type and count
-        const voiceCategory = getVoiceCategory(voice);
-
-        // Update quota
+        // Update quota (voiceCategory already determined above)
         await updateQuota(voiceCategory, count);
         console.log("Quota updated.");
 
-        // Generate the output filename based on the original file name
+        // Generate unique output filename based on the original file name
         const sanitizedFileName = path.parse(originalFileName).name.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
-        const outputFileName = `${sanitizedFileName}_audio.mp3`;
+        const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const outputFileName = `${sanitizedFileName}_${uniqueId}_audio.mp3`;
         const outputFile = path.join(__dirname, 'public', outputFileName);
 
         await fs.writeFile(outputFile, response.audioContent, 'binary');
@@ -287,6 +313,12 @@ function countCharactersInSsml(ssmlText) {
     // Remove SSML tags
     const strippedText = ssmlText.replace(/<[^>]+>/g, '');
     return strippedText.length;
+}
+
+// **Function to Extract Text from SSML (for byte counting)**
+function countCharactersInSsmlText(ssmlText) {
+    // Remove SSML tags and return the plain text
+    return ssmlText.replace(/<[^>]+>/g, '');
 }
 
 const PORT = process.env.PORT || 3000;

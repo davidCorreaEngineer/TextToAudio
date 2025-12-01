@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let usageChart;
     let voiceTypeChart;
 
+    // **Track current audio URL for cleanup**
+    let currentAudioUrl = null;
+
     const MAX_TEXT_LENGTH = 5000;
 
     let originalFileName = 'audio'; // Default name if no file is uploaded
@@ -184,10 +187,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const result = await response.json();
             if (result.success) {
+                // Revoke previous audio URL to prevent memory leak
+                if (currentAudioUrl) {
+                    URL.revokeObjectURL(currentAudioUrl);
+                }
                 // Decode Base64 audio content
                 const audioBlob = base64ToBlob(result.audioContent, 'audio/mp3');
-                const audioUrl = URL.createObjectURL(audioBlob);
-                audioPlayer.src = audioUrl;
+                currentAudioUrl = URL.createObjectURL(audioBlob);
+                audioPlayer.src = currentAudioUrl;
                 audioPlayer.style.display = 'block';
                 audioPlayer.play();
                 testSentenceDiv.textContent = `Test sentence: "${result.testText}"`;
@@ -297,7 +304,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 	
-	// **Function to Convert Text to SSML with Pauses**
+	// **Function to Escape XML Special Characters for SSML**
+    function escapeXml(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    }
+
+    // **Function to Convert Text to SSML with Pauses**
     function convertTextToSsml(text, pauseDuration) {
         // Split text into sentences based on periods, question marks, or exclamation marks
         const sentenceEndRegex = /([.?!])/g;
@@ -305,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let ssmlText = '<speak>';
 
         for (let i = 0; i < sentences.length; i += 2) {
-            const sentence = sentences[i].trim();
+            const sentence = escapeXml(sentences[i].trim());
             const punctuation = sentences[i + 1] || '';
             ssmlText += sentence + punctuation;
 
