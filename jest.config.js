@@ -10,19 +10,18 @@ module.exports = {
 
   // Coverage configuration
   collectCoverageFrom: [
-    'app_server.js',
-    'public/app_client.js',
+    'src/**/*.js',
     '!**/node_modules/**',
     '!**/tests/**'
   ],
 
-  // Coverage thresholds (start low, increase over time)
+  // Coverage thresholds (increased to 65% - 2025-12-06)
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 50,
-      lines: 50,
-      statements: 50
+      branches: 65,
+      functions: 65,
+      lines: 65,
+      statements: 65
     }
   },
 

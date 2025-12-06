@@ -1,17 +1,30 @@
 const express = require('express');
 const multer = require('multer');
-const textToSpeech = require('@google-cloud/text-to-speech');
 const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
-const crypto = require('crypto');
+const {
+    getVoiceCategory,
+    countCharacters,
+    countBytes,
+    countCharactersInSsml,
+    countCharactersInSsmlText,
+    QUOTA_LIMITS,
+} = require('./src/utils');
+const { createApiKeyAuthMiddleware } = require('./src/middleware/auth');
+const { createRateLimitMiddleware } = require('./src/middleware/rateLimit');
+const { createCorsOptions, parseCorsConfig } = require('./src/middleware/cors');
+const { sanitizeError, sendError } = require('./src/middleware/errorHandler');
+const {
+    createTtsClient,
+    generateSpeech,
+    listVoices
+} = require('./src/services/ttsService');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-const client = new textToSpeech.TextToSpeechClient({
-    keyFilename: path.join(__dirname, 'keyfile.json')
-});
+const client = createTtsClient(path.join(__dirname, 'keyfile.json'));
 
 const MAX_TEXT_LENGTH = 5000; // Maximum allowed bytes
 
@@ -42,26 +55,13 @@ const ACTIVE_API_KEY = process.env.TTS_API_KEY;
 // Set allowed origins via environment variable (comma-separated) or default to same-origin only
 // Use "*" to allow all origins (not recommended for production)
 const CORS_ORIGINS_RAW = process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS || '';
-const ALLOW_ALL_ORIGINS = CORS_ORIGINS_RAW.trim() === '*';
-const ALLOWED_ORIGINS = ALLOW_ALL_ORIGINS
-    ? []
-    : CORS_ORIGINS_RAW
-        ? CORS_ORIGINS_RAW.split(',').map(origin => origin.trim())
-        : [];  // Empty array = same-origin only (no cross-origin requests allowed)
+const { allowAll: ALLOW_ALL_ORIGINS, allowedOrigins: ALLOWED_ORIGINS } = parseCorsConfig(CORS_ORIGINS_RAW);
 
 // Rate limiting: max requests per IP per window
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10;     // 10 requests per minute per IP
 
-// Quota limits (monthly) - same as client-side FREE_TIER_LIMITS
-const QUOTA_LIMITS = {
-    'Neural2': 1000000,      // 1 million bytes
-    'Studio': 100000,        // 100,000 bytes
-    'Polyglot': 100000,      // 100,000 bytes
-    'Standard': 4000000,     // 4 million characters
-    'WaveNet': 1000000,      // 1 million characters
-    'Journey': 1000000       // 1 million bytes
-};
+// Quota limits imported from src/utils.js
 
 // File cleanup: delete audio files older than this
 const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
@@ -70,120 +70,24 @@ const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 // SECURITY: API KEY AUTHENTICATION
 // =============================================================================
 
-function apiKeyAuthMiddleware(req, res, next) {
-    // Check for API key in header (preferred) or query parameter (fallback)
-    const providedKey = req.headers['x-api-key'] || req.query.apiKey;
-
-    if (!providedKey) {
-        return res.status(401).json({
-            success: false,
-            error: 'Authentication required. Provide API key via X-API-Key header.'
-        });
-    }
-
-    // Constant-time comparison to prevent timing attacks
-    if (!crypto.timingSafeEqual(Buffer.from(providedKey), Buffer.from(ACTIVE_API_KEY))) {
-        return res.status(403).json({
-            success: false,
-            error: 'Invalid API key.'
-        });
-    }
-
-    next();
-}
+// Create authentication middleware with the active API key
+const apiKeyAuthMiddleware = createApiKeyAuthMiddleware(ACTIVE_API_KEY);
 
 // =============================================================================
 // SECURITY: ERROR SANITIZATION
 // =============================================================================
 
-// Known safe error patterns that can be shown to users
-const SAFE_ERROR_PATTERNS = [
-    /No text provided/i,
-    /Text is too long/i,
-    /No file uploaded/i,
-    /Rate limit exceeded/i,
-    /Monthly quota exceeded/i,
-    /Invalid API key/i,
-    /Authentication required/i,
-];
-
-function sanitizeError(error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    // Check if this is a known safe error message
-    for (const pattern of SAFE_ERROR_PATTERNS) {
-        if (pattern.test(message)) {
-            return message;
-        }
-    }
-
-    // For Google API errors, extract only the safe part
-    if (message.includes('INVALID_ARGUMENT')) {
-        return 'Invalid request parameters. Please check your input.';
-    }
-    if (message.includes('PERMISSION_DENIED')) {
-        return 'Service configuration error. Please contact the administrator.';
-    }
-    if (message.includes('RESOURCE_EXHAUSTED')) {
-        return 'Service quota exceeded. Please try again later.';
-    }
-
-    // Log the actual error for debugging (server-side only)
-    console.error('Sanitized error (original):', message);
-
-    // Return generic error to client
-    return 'An unexpected error occurred. Please try again.';
-}
-
-// Helper to send sanitized error responses
-function sendError(res, statusCode, error) {
-    return res.status(statusCode).json({
-        success: false,
-        error: sanitizeError(error)
-    });
-}
+// Error sanitization functions imported from src/middleware/errorHandler.js
 
 // =============================================================================
 // RATE LIMITING
 // =============================================================================
 
-const rateLimitStore = new Map(); // IP -> { count, resetTime }
-
-function rateLimitMiddleware(req, res, next) {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const now = Date.now();
-
-    let record = rateLimitStore.get(ip);
-
-    // Clean up or create new record if expired
-    if (!record || now > record.resetTime) {
-        record = { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
-        rateLimitStore.set(ip, record);
-    }
-
-    record.count++;
-
-    if (record.count > RATE_LIMIT_MAX_REQUESTS) {
-        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
-        res.set('Retry-After', retryAfter);
-        return res.status(429).json({
-            success: false,
-            error: `Rate limit exceeded. Try again in ${retryAfter} seconds.`
-        });
-    }
-
-    next();
-}
-
-// Periodically clean up old entries from rate limit store (every 5 minutes)
-setInterval(() => {
-    const now = Date.now();
-    for (const [ip, record] of rateLimitStore.entries()) {
-        if (now > record.resetTime) {
-            rateLimitStore.delete(ip);
-        }
-    }
-}, 5 * 60 * 1000);
+// Create rate limiting middleware with configured limits
+const rateLimitMiddleware = createRateLimitMiddleware({
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    maxRequests: RATE_LIMIT_MAX_REQUESTS
+});
 
 // =============================================================================
 // FILE CLEANUP
@@ -227,76 +131,19 @@ cleanupOldAudioFiles();
 // =============================================================================
 
 // CORS with restricted origins
-const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (same-origin, Postman, curl, etc.)
-        if (!origin) {
-            return callback(null, true);
-        }
-
-        // Allow all origins if configured with "*"
-        if (ALLOW_ALL_ORIGINS) {
-            return callback(null, true);
-        }
-
-        // Check if origin is in the allowed list
-        if (ALLOWED_ORIGINS.length === 0) {
-            // No origins configured = reject all cross-origin requests
-            return callback(new Error('Cross-origin requests not allowed'), false);
-        }
-
-        if (ALLOWED_ORIGINS.includes(origin)) {
-            return callback(null, true);
-        }
-
-        return callback(new Error('Origin not allowed by CORS policy'), false);
-    },
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'X-API-Key'],
-    credentials: false,
-    maxAge: 86400 // Cache preflight for 24 hours
-};
+const corsOptions = createCorsOptions({
+    allowAll: ALLOW_ALL_ORIGINS,
+    allowedOrigins: ALLOWED_ORIGINS
+});
 
 app.use(cors(corsOptions));
 app.use(express.static('public'));
 app.use(express.json());
 
 // **1. Voice Type Mapping Function**
-function getVoiceCategory(voiceName) {
-    // Define mapping based on known voice name patterns or specific names
-    // This mapping may need to be updated as new voices are introduced
-    if (/Standard/i.test(voiceName)) {
-        return 'Standard';
-    } else if (/WaveNet/i.test(voiceName)) {
-        return 'WaveNet';
-    } else if (/Neural2/i.test(voiceName)) {
-        return 'Neural2';
-    } else if (/Polyglot/i.test(voiceName)) {
-        return 'Polyglot';
-    } else if (/Journey/i.test(voiceName)) {
-        return 'Journey';
-    } else if (/Studio/i.test(voiceName)) {
-        return 'Studio';
-    } else {
-        // Default category for any new or unknown voice types
-        return 'Standard';
-    }
-}
+// Utility functions (getVoiceCategory, countCharacters, countBytes) imported from src/utils.js
 
-// **2. Count Characters Function**
-function countCharacters(text) {
-    // Remove SSML mark tags
-    const textWithoutMarks = text.replace(/<mark name=['"].*?['"]\/>/g, '');
-    // Count remaining characters (including other SSML tags, spaces, and line breaks)
-    return textWithoutMarks.length;
-}
-
-// **3. Count Bytes Function**
-function countBytes(text) {
-    return Buffer.byteLength(text, 'utf8');
-}
-
-// **4. Mutex for Quota Updates (prevents race conditions)**
+// **Mutex for Quota Updates (prevents race conditions)**
 let quotaLock = Promise.resolve();
 
 // **5. Update Quota Function with Mutex Lock**
@@ -387,15 +234,11 @@ app.get('/', (req, res) => {
 app.get('/voices', apiKeyAuthMiddleware, async (req, res) => {
     try {
         console.log('Fetching voices from Google TTS API...');
-        const [result] = await client.listVoices({});
-        console.log(`Total voices received: ${result.voices.length}`);
 
         // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English, French, Italian, Portuguese and Portuguese
 		const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
 
-        const voices = result.voices.filter(voice =>
-            voice.languageCodes.some(code => supportedLanguages.includes(code))
-        );
+        const voices = await listVoices(client, supportedLanguages);
 
         console.log(`Filtered voices: ${voices.length}`);
 
@@ -448,29 +291,18 @@ app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(
         }
         console.log(`Test sentence: "${testText.substring(0, 100)}${testText.length > 100 ? '...' : ''}"`);
 
-        // Build input based on whether SSML is used
-        let input;
-        if (useCustomSsml) {
-            input = { ssml: testText };
-        } else {
-            input = { text: testText };
-        }
-
-        const request = {
-            input: input,
-            voice: { languageCode: language, name: voice },
-            audioConfig: {
-                audioEncoding: 'MP3',
-                speakingRate: parseFloat(speakingRate) || 1.0,
-                pitch: parseFloat(pitch) || 0.0
-            },
-        };
-
-        const [response] = await client.synthesizeSpeech(request);
+        const audioContent = await generateSpeech(client, {
+            text: testText,
+            languageCode: language,
+            voiceName: voice,
+            speakingRate,
+            pitch,
+            useSsml: useCustomSsml
+        });
         console.log("Audio synthesized successfully for test voice.");
 
         // Convert audio content to Base64
-        const audioBase64 = response.audioContent.toString('base64');
+        const audioBase64 = audioContent.toString('base64');
         res.json({ success: true, audioContent: audioBase64, testText: testText });
         console.log("Test voice audio data sent to client.");
     } catch (error) {
@@ -515,14 +347,6 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
         if (!text) {
             console.log("No text provided for synthesis.");
             return res.status(400).json({ success: false, error: 'No text provided.' });
-        }
-
-        // **Set Input Type Based on useSsml**
-        let input;
-        if (useSsml) {
-            input = { ssml: text };
-        } else {
-            input = { text: text };
         }
 
         // **Determine voice category first for correct quota counting**
@@ -575,17 +399,14 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
             });
         }
 
-        const request = {
-            input: input,
-            voice: { languageCode: language, name: voice },
-            audioConfig: {
-                audioEncoding: 'MP3',
-                speakingRate: speakingRate,
-                pitch: pitch
-            },
-        };
-
-        const [response] = await client.synthesizeSpeech(request);
+        const audioContent = await generateSpeech(client, {
+            text,
+            languageCode: language,
+            voiceName: voice,
+            speakingRate,
+            pitch,
+            useSsml
+        });
         console.log("Audio synthesized successfully.");
 
         // Update quota (voiceCategory already determined above)
@@ -598,7 +419,7 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
         const outputFileName = `${sanitizedFileName}_${uniqueId}_audio.mp3`;
         const outputFile = path.join(__dirname, 'public', outputFileName);
 
-        await fs.writeFile(outputFile, response.audioContent, 'binary');
+        await fs.writeFile(outputFile, audioContent, 'binary');
         console.log(`Audio file saved as ${outputFileName}`);
 
         res.json({ success: true, file: outputFileName, fileName: outputFileName });
@@ -714,17 +535,7 @@ app.get('/german-lessons/:filename', apiKeyAuthMiddleware, async (req, res) => {
 });
 
 // **Function to Count Characters in SSML Input**
-function countCharactersInSsml(ssmlText) {
-    // Remove SSML tags
-    const strippedText = ssmlText.replace(/<[^>]+>/g, '');
-    return strippedText.length;
-}
-
-// **Function to Extract Text from SSML (for byte counting)**
-function countCharactersInSsmlText(ssmlText) {
-    // Remove SSML tags and return the plain text
-    return ssmlText.replace(/<[^>]+>/g, '');
-}
+// SSML utility functions (countCharactersInSsml, countCharactersInSsmlText) imported from src/utils.js
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
