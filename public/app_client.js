@@ -180,32 +180,63 @@ document.addEventListener('DOMContentLoaded', function() {
     languageSelect.addEventListener('change', loadVoices);
 
     // **4. Handle File Selection and Preview**
+    const selectedFilesList = document.getElementById('selectedFilesList');
+    const filesListContent = document.getElementById('filesListContent');
+
     textFileInput.addEventListener('change', function(e) {
         console.log("File input changed.");
-        const file = e.target.files[0];
-        if (file) {
-            originalFileName = file.name;
-            console.log("Selected file:", originalFileName, file.size, "bytes");
-            // Display File Size
-            const fileSize = file.size;
-            fileSizeDiv.textContent = `File size: ${fileSize.toLocaleString()} bytes`;
-            if (fileSize > MAX_TEXT_LENGTH) {
-                fileSizeDiv.innerHTML += '<br><span class="text-warning">Warning: File exceeds maximum allowed size.</span>';
-            }
+        const files = e.target.files;
 
-            // Preview Text Content
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                textPreview.value = event.target.result;
-                console.log("Text preview updated.");
-                updateStrippedCharCount();
-                updateShadowingVisibility();
-            };
-            reader.readAsText(file);
+        if (files.length > 0) {
+            // Multiple files selected
+            if (files.length > 1) {
+                console.log(`${files.length} files selected`);
+
+                // Show list of selected files
+                let filesList = '';
+                let totalSize = 0;
+                for (let i = 0; i < files.length; i++) {
+                    filesList += `${i + 1}. ${files[i].name} (${files[i].size.toLocaleString()} bytes)<br>`;
+                    totalSize += files[i].size;
+                }
+
+                filesListContent.innerHTML = filesList;
+                selectedFilesList.style.display = 'block';
+                fileSizeDiv.textContent = `Total size: ${totalSize.toLocaleString()} bytes (${files.length} files)`;
+
+                // Clear text preview for batch mode
+                textPreview.value = '';
+                originalFileName = 'batch'; // Indicate batch mode
+            } else {
+                // Single file selected
+                const file = files[0];
+                originalFileName = file.name;
+                console.log("Selected file:", originalFileName, file.size, "bytes");
+
+                selectedFilesList.style.display = 'none';
+
+                // Display File Size
+                const fileSize = file.size;
+                fileSizeDiv.textContent = `File size: ${fileSize.toLocaleString()} bytes`;
+                if (fileSize > MAX_TEXT_LENGTH) {
+                    fileSizeDiv.innerHTML += '<br><span class="text-warning">Warning: File exceeds maximum allowed size.</span>';
+                }
+
+                // Preview Text Content
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    textPreview.value = event.target.result;
+                    console.log("Text preview updated.");
+                    updateStrippedCharCount();
+                    updateShadowingVisibility();
+                };
+                reader.readAsText(file);
+            }
         } else {
             originalFileName = 'audio'; // Reset if no file is selected
             fileSizeDiv.textContent = '';
             textPreview.value = '';
+            selectedFilesList.style.display = 'none';
             console.log("File input cleared.");
         }
     });
@@ -802,6 +833,13 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         e.preventDefault();
         console.log("Form submitted.");
 
+        // Check if batch mode (multiple files uploaded)
+        if (currentInputMode === 'file' && textFileInput.files.length > 1) {
+            // Handle batch processing
+            await handleBatchProcessing(textFileInput.files);
+            return;
+        }
+
         // Retrieve text based on current input mode
         let editedText;
         if (currentInputMode === 'editor') {
@@ -989,6 +1027,117 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
     // - Lines starting with // (single-line comments)
     // - Lines starting with /* or ending with */ (multi-line comment markers)
     // - Lines starting with == (section headers)
+    // **Batch Processing Handler**
+    async function handleBatchProcessing(files) {
+        console.log(`Starting batch processing for ${files.length} files`);
+
+        const formData = new FormData();
+
+        // Append all files
+        for (let i = 0; i < files.length; i++) {
+            formData.append('textFiles', files[i]);
+        }
+
+        // Append voice settings
+        formData.append('language', languageSelect.value);
+        formData.append('voice', voiceSelect.value);
+        formData.append('speakingRate', speakingRateInput.value);
+        formData.append('pitch', pitchInput.value);
+        formData.append('useSsml', 'false'); // Batch mode doesn't use SSML currently
+
+        // Show progress
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        setButtonLoading(submitBtn, true);
+
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/synthesize-batch', true);
+            xhr.setRequestHeader('X-API-Key', API_KEY);
+
+            // Upload progress
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 50); // 0-50% for upload
+                    progressBar.style.width = `${percentComplete}%`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    progressBar.style.width = '100%';
+                    const response = JSON.parse(xhr.responseText);
+
+                    if (response.success) {
+                        console.log('Batch processing complete:', response);
+
+                        // Display results
+                        let resultsHtml = `<div style="margin-bottom: var(--space-md);">
+                            <strong>Batch Processing Complete</strong><br>
+                            Processed: ${response.successCount} / ${response.totalFiles} files
+                        </div>`;
+
+                        // Show individual results
+                        response.results.forEach((result, index) => {
+                            if (result.success) {
+                                resultsHtml += `
+                                    <div style="margin-bottom: var(--space-sm); padding: var(--space-sm); background: var(--bg-secondary); border-radius: var(--radius-sm);">
+                                        <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                                        ${result.fileName} →
+                                        <a href="${result.audioFile}" download class="download-btn" style="display: inline-flex; margin-left: var(--space-sm);">
+                                            <i class="fas fa-download"></i> ${result.audioFile}
+                                        </a>
+                                    </div>`;
+                            } else {
+                                resultsHtml += `
+                                    <div style="margin-bottom: var(--space-sm); padding: var(--space-sm); background: #fee2e2; border-radius: var(--radius-sm); color: var(--error);">
+                                        <i class="fas fa-exclamation-circle"></i>
+                                        ${result.fileName}: ${result.error}
+                                    </div>`;
+                            }
+                        });
+
+                        resultDiv.innerHTML = resultsHtml;
+
+                        if (response.successCount > 0) {
+                            showToast('success', 'Batch Complete', `Successfully generated ${response.successCount} audio files`);
+                        } else {
+                            showToast('error', 'Batch Failed', 'No files were processed successfully');
+                        }
+
+                        // Reload usage stats
+                        loadUsageStats();
+                    } else {
+                        throw new Error(response.error || 'Batch processing failed');
+                    }
+                } else {
+                    const errorData = JSON.parse(xhr.responseText);
+                    throw new Error(errorData.error || `Server error: ${xhr.status}`);
+                }
+
+                setButtonLoading(submitBtn, false);
+                progressContainer.style.display = 'none';
+            };
+
+            xhr.onerror = function() {
+                console.error('Network error during batch processing');
+                showToast('error', 'Network Error', 'Failed to connect to server');
+                setButtonLoading(submitBtn, false);
+                progressContainer.style.display = 'none';
+            };
+
+            xhr.send(formData);
+
+        } catch (error) {
+            console.error('Error in batch processing:', error);
+            showToast('error', 'Batch Error', error.message);
+            setButtonLoading(submitBtn, false);
+            progressContainer.style.display = 'none';
+        }
+    }
+
     // - Multi-line /* ... */ blocks
     function stripComments(text) {
         // First, remove multi-line /* ... */ blocks (including content between them)

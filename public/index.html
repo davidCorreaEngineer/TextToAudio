@@ -2276,11 +2276,15 @@
                         <div class="drop-icon">
                             <i class="fas fa-cloud-upload-alt"></i>
                         </div>
-                        <p>Drop your text file here or click to browse</p>
-                        <p class="drop-hint">Supports .txt files</p>
-                        <input type="file" id="textFile" name="textFile" accept=".txt" hidden />
+                        <p>Drop your text file(s) here or click to browse</p>
+                        <p class="drop-hint">Supports .txt files (single or multiple)</p>
+                        <input type="file" id="textFile" name="textFile" accept=".txt" multiple hidden />
                     </div>
                     <div id="fileSize"></div>
+                    <div id="selectedFilesList" style="margin-top: var(--space-md); display: none;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-xs);">Selected Files:</div>
+                        <div id="filesListContent" style="font-size: 0.75rem; color: var(--text-muted);"></div>
+                    </div>
                 </div>
 
                 <!-- Text Editor Section -->

@@ -547,5 +547,146 @@ app.get('/german-lessons/:filename', apiKeyAuthMiddleware, async (req, res) => {
 // **Function to Count Characters in SSML Input**
 // SSML utility functions (countCharactersInSsml, countCharactersInSsmlText) imported from src/utils.js
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// **15. Batch Synthesize Endpoint (Process Multiple Text Files)**
+// Protected by API key authentication and rate limited
+app.post('/synthesize-batch', apiKeyAuthMiddleware, rateLimitMiddleware, upload.array('textFiles', 20), async (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            console.log("No files uploaded for batch synthesis.");
+            return res.status(400).json({ success: false, error: 'No files uploaded.' });
+        }
+
+        const language = req.body.language;
+        const voice = req.body.voice;
+        const speakingRate = parseFloat(req.body.speakingRate) || 1.0;
+        const pitch = parseFloat(req.body.pitch) || 0.0;
+        const useSsml = req.body.useSsml === 'true';
+
+        console.log(`Received batch synthesize request: ${req.files.length} files, Language=${language}, Voice=${voice}`);
+
+        const results = [];
+        const voiceCategory = getVoiceCategory(voice);
+        const byteBasedVoices = ['Neural2', 'Studio', 'Polyglot', 'Journey'];
+
+        // Process each file sequentially
+        for (let i = 0; i < req.files.length; i++) {
+            const file = req.files[i];
+            const fileName = path.parse(file.originalname).name;
+
+            try {
+                // Read file content
+                const text = await fs.readFile(file.path, 'utf8');
+
+                if (!text.trim()) {
+                    results.push({
+                        success: false,
+                        fileName: file.originalname,
+                        error: 'File is empty'
+                    });
+                    await fs.unlink(file.path); // Clean up uploaded file
+                    continue;
+                }
+
+                // Count for quota
+                let count;
+                if (byteBasedVoices.includes(voiceCategory)) {
+                    count = useSsml ? countBytes(countCharactersInSsmlText(text)) : countBytes(text);
+                } else {
+                    count = useSsml ? countCharactersInSsml(text) : countCharacters(text);
+                }
+
+                // Check text length
+                if (count > MAX_TEXT_LENGTH) {
+                    results.push({
+                        success: false,
+                        fileName: file.originalname,
+                        error: `Text too long (${count} characters). Max: ${MAX_TEXT_LENGTH}`
+                    });
+                    await fs.unlink(file.path);
+                    continue;
+                }
+
+                // Check quota
+                const quotaCheck = await checkQuotaAllows(voiceCategory, count);
+                if (!quotaCheck.allowed) {
+                    const unit = byteBasedVoices.includes(voiceCategory) ? 'bytes' : 'characters';
+                    results.push({
+                        success: false,
+                        fileName: file.originalname,
+                        error: `Quota exceeded for ${voiceCategory}. Remaining: ${quotaCheck.remaining} ${unit}`
+                    });
+                    await fs.unlink(file.path);
+                    continue;
+                }
+
+                // Generate speech
+                const audioContent = await generateSpeech(client, {
+                    text,
+                    languageCode: language,
+                    voiceName: voice,
+                    speakingRate,
+                    pitch,
+                    useSsml
+                });
+
+                // Update quota
+                await updateQuota(voiceCategory, count);
+
+                // Save audio file
+                const sanitizedFileName = fileName.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
+                const outputFileName = `${sanitizedFileName}.mp3`;
+                const outputFile = path.join(__dirname, 'public', outputFileName);
+                await fs.writeFile(outputFile, audioContent, 'binary');
+
+                results.push({
+                    success: true,
+                    fileName: file.originalname,
+                    audioFile: outputFileName
+                });
+
+                console.log(`Processed ${i + 1}/${req.files.length}: ${file.originalname} -> ${outputFileName}`);
+
+                // Clean up uploaded file
+                await fs.unlink(file.path);
+
+            } catch (error) {
+                console.error(`Error processing file ${file.originalname}:`, error);
+                results.push({
+                    success: false,
+                    fileName: file.originalname,
+                    error: error.message || 'Processing failed'
+                });
+
+                // Clean up uploaded file
+                try {
+                    await fs.unlink(file.path);
+                } catch (unlinkError) {
+                    // Ignore if already deleted
+                }
+            }
+        }
+
+        const successCount = results.filter(r => r.success).length;
+        console.log(`Batch processing complete: ${successCount}/${req.files.length} succeeded`);
+
+        res.json({
+            success: true,
+            totalFiles: req.files.length,
+            successCount,
+            results
+        });
+
+    } catch (error) {
+        console.error("Error in batch synthesis:", error);
+        return sendError(res, 500, error);
+    }
+});
+
+// Export app for testing
+module.exports = app;
+
+// Only start server if not in test environment
+if (require.main === module) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
