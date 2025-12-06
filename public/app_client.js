@@ -270,6 +270,50 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Audio player: canplay event");
     });
 
+    // Test Browser Audio button - plays a tone to verify audio output works
+    const testAudioBtn = document.getElementById('testAudioBtn');
+    const audioTestResult = document.getElementById('audioTestResult');
+
+    if (testAudioBtn) {
+        testAudioBtn.addEventListener('click', () => {
+            console.log("Testing browser audio...");
+            audioTestResult.textContent = "Playing test tone...";
+            audioTestResult.style.color = '#666';
+
+            try {
+                // Create Web Audio API context
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const audioContext = new AudioContext();
+
+                // Create oscillator for a simple beep
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                // Configure tone
+                oscillator.frequency.value = 440; // A4 note
+                oscillator.type = 'sine';
+                gainNode.gain.value = 0.3; // Not too loud
+
+                // Play for 500ms
+                oscillator.start();
+                setTimeout(() => {
+                    oscillator.stop();
+                    audioContext.close();
+                    audioTestResult.textContent = "Test tone played! Did you hear it?";
+                    audioTestResult.style.color = 'green';
+                    console.log("Test tone completed.");
+                }, 500);
+            } catch (err) {
+                console.error("Test audio failed:", err);
+                audioTestResult.textContent = "Audio test failed: " + err.message;
+                audioTestResult.style.color = 'red';
+            }
+        });
+    }
+
     // Prevent audio player clicks from bubbling (in case it's inside or near the drop zone)
     mainAudioPlayer.addEventListener('click', (e) => {
         e.stopPropagation();
