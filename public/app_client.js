@@ -236,9 +236,6 @@ document.addEventListener('DOMContentLoaded', function() {
         audioFileInfo.style.display = 'block';
         mainAudioPlayer.style.display = 'block';
 
-        // Load the audio
-        mainAudioPlayer.load();
-
         console.log("Audio loaded into player:", fileName);
     }
 
@@ -272,15 +269,35 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
     });
 
+    // Debounce flag to prevent double-click issues
+    let isFileDialogOpen = false;
+
     // Click to open file dialog
     audioDropZone.addEventListener('click', (e) => {
-        // Only trigger if clicking directly on the drop zone, not on child elements that handle their own events
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Prevent opening multiple dialogs
+        if (isFileDialogOpen) {
+            console.log("File dialog already open, ignoring click.");
+            return;
+        }
+
         console.log("Audio drop zone clicked. Opening file dialog.");
+        isFileDialogOpen = true;
         audioFileInput.click();
+
+        // Reset flag after a short delay (dialog close doesn't have a reliable event)
+        setTimeout(() => {
+            isFileDialogOpen = false;
+        }, 1000);
     });
 
     // Handle file selection
     audioFileInput.addEventListener('change', (e) => {
+        e.stopPropagation();
+        isFileDialogOpen = false;
+
         const file = e.target.files[0];
         if (file) {
             console.log("Audio file selected:", file.name);

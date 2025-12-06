@@ -308,12 +308,14 @@
             <h4><i class="fas fa-headphones"></i> Audio Player</h4>
             <p class="text-muted small">Upload an audio file or generate audio above to play it here.</p>
 
+            <!-- Hidden file input (outside drop zone to prevent event issues) -->
+            <input type="file" id="audioFileInput" accept="audio/*" hidden />
+
             <!-- Audio Drop Zone -->
             <div id="audioDropZone">
                 <i class="fas fa-music"></i>
                 <p class="mb-0">Drag and drop an audio file here or click to select</p>
                 <small class="text-muted">Supports MP3, WAV, OGG, M4A</small>
-                <input type="file" id="audioFileInput" accept="audio/*" hidden />
             </div>
 
             <!-- Audio File Name Display -->
