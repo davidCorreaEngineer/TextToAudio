@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "app_server.js",
   "scripts": {
-    "start": "node app_server.js",
+    "start": "CORS_ORIGINS=* PORT=3001 node app_server.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

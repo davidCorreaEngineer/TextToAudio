@@ -95,6 +95,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const ssmlSayAsBtn = document.getElementById('ssmlSayAs');
     const ssmlHelpBtn = document.getElementById('ssmlHelp');
 
+    // German Lessons Elements
+    const germanLessonSelect = document.getElementById('germanLessonSelect');
+    const loadGermanLessonBtn = document.getElementById('loadGermanLesson');
+
     // Track current input mode
     let currentInputMode = 'file'; // 'file' or 'editor'
 
@@ -195,6 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 textPreview.value = event.target.result;
                 console.log("Text preview updated.");
                 updateStrippedCharCount();
+                updateShadowingVisibility();
             };
             reader.readAsText(file);
         } else {
@@ -390,22 +395,74 @@ document.addEventListener('DOMContentLoaded', function() {
         audioDropZone.classList.remove('dragover');
     });
 
-    // Drop
+    // Drop - supports both audio and text files for shadowing practice
     audioDropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         audioDropZone.classList.remove('dragover');
-        console.log("Audio file dropped.");
+        console.log("Files dropped:", e.dataTransfer.files.length);
 
         if (e.dataTransfer.files.length) {
-            const file = e.dataTransfer.files[0];
-            // Check if it's an audio file
-            if (file.type.startsWith('audio/')) {
-                loadAudioIntoPlayer(file, file.name);
-            } else {
-                alert('Please drop an audio file (MP3, WAV, OGG, M4A).');
+            var audioFile = null;
+            var textFile = null;
+
+            // Sort files into audio and text
+            for (var i = 0; i < e.dataTransfer.files.length; i++) {
+                var file = e.dataTransfer.files[i];
+                if (file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a)$/i)) {
+                    audioFile = file;
+                } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+                    textFile = file;
+                }
+            }
+
+            // Load audio file
+            if (audioFile) {
+                loadAudioIntoPlayer(audioFile, audioFile.name);
+                console.log("Audio file loaded:", audioFile.name);
+            }
+
+            // Load text file for shadowing
+            if (textFile) {
+                loadPracticeTextFile(textFile);
+                console.log("Text file loaded:", textFile.name);
+            }
+
+            if (!audioFile && !textFile) {
+                alert('Please drop an audio file (MP3, WAV) and/or a text file (.txt)');
             }
         }
     });
+
+    // Practice text file elements
+    var practiceTextInfo = document.getElementById('practiceTextInfo');
+    var practiceTextFileName = document.getElementById('practiceTextFileName');
+    var practiceText = ''; // Store loaded practice text
+
+    // Load practice text file
+    function loadPracticeTextFile(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            practiceText = e.target.result;
+
+            // Update UI
+            if (practiceTextInfo) {
+                practiceTextInfo.style.display = 'flex';
+                practiceTextFileName.textContent = file.name;
+            }
+
+            // Also put it in the text editor so shadowing can use it
+            if (textEditor) {
+                textEditor.value = practiceText;
+                updateEditorCharCount();
+            }
+
+            // Update shadowing visibility
+            updateShadowingVisibility();
+
+            console.log("Practice text loaded:", file.name, "-", practiceText.length, "characters");
+        };
+        reader.readAsText(file);
+    }
 
     // **6. Update Display Values for Advanced Settings**
     speakingRateInput.addEventListener('input', () => {
@@ -1024,39 +1081,65 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             usageBarFill.classList.add('warning');
         }
 
-        // Update tooltip content
+        // Update tooltip content with detailed usage info
         if (usageTooltipContent) {
-            let tooltipHtml = '';
-            for (const [voiceType, data] of Object.entries(voiceTypeUsage)) {
-                if (data.usage > 0) {
-                    const pct = Math.round((data.usage / data.limit) * 100);
-                    tooltipHtml += `<div class="usage-tooltip-item">
-                        <span>${voiceType}</span>
-                        <span>${pct}%</span>
-                    </div>`;
+            var tooltipHtml = '';
+
+            // Show all voice types with usage
+            for (var voiceType in voiceTypeUsage) {
+                var data = voiceTypeUsage[voiceType];
+                if (data.usage > 0 || data.limit > 0) {
+                    var pct = Math.round((data.usage / data.limit) * 100);
+                    var isCharBased = (voiceType === 'Standard' || voiceType === 'WaveNet');
+                    var unit = isCharBased ? 'chars' : 'bytes';
+                    var usageStr = formatNumber(data.usage);
+                    var limitStr = formatNumber(data.limit);
+
+                    tooltipHtml += '<div class="usage-tooltip-item">' +
+                        '<span class="voice-name">' + voiceType + '</span>' +
+                        '<span class="voice-usage">' + usageStr + ' / ' + limitStr + ' ' + unit + '</span>' +
+                        '<span class="voice-pct ' + (pct >= 90 ? 'danger' : (pct >= 70 ? 'warning' : '')) + '">' + pct + '%</span>' +
+                    '</div>';
                 }
             }
+
             if (!tooltipHtml) {
                 tooltipHtml = '<div class="usage-tooltip-item"><span>No usage this month</span></div>';
             }
+
+            // Add month label
+            tooltipHtml = '<div class="usage-month">' + currentMonth + '</div>' + tooltipHtml;
+
             usageTooltipContent.innerHTML = tooltipHtml;
         }
     }
 
+    // Format large numbers (1000 -> 1K, 1000000 -> 1M)
+    function formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    }
+
     function displayUsageStats(quota) {
         if (Object.keys(quota).length === 0) {
-            dashboardDiv.innerHTML = '<p>No usage data available.</p>';
+            console.log('No usage data available');
             return;
         }
 
         // **10.1. Calculate Summary Statistics**
-        let totalUsage = 0;
-        let uniqueVoicesSet = new Set();
-        let currentMonth = getCurrentYearMonth();
-        let currentMonthUsage = 0;
+        var totalUsage = 0;
+        var uniqueVoicesSet = new Set();
+        var currentMonth = getCurrentYearMonth();
+        var currentMonthUsage = 0;
 
-        for (const [yearMonth, voices] of Object.entries(quota)) {
-            for (const [voiceType, count] of Object.entries(voices)) {
+        for (var yearMonth in quota) {
+            var voices = quota[yearMonth];
+            for (var voiceType in voices) {
+                var count = voices[voiceType];
                 totalUsage += count;
                 uniqueVoicesSet.add(voiceType);
                 if (yearMonth === currentMonth) {
@@ -1065,10 +1148,16 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             }
         }
 
-        // **10.2. Update Summary Cards**
-        document.getElementById('totalUsage').textContent = totalUsage.toLocaleString();
-        document.getElementById('uniqueVoices').textContent = uniqueVoicesSet.size;
-        document.getElementById('currentMonthUsage').textContent = currentMonthUsage.toLocaleString();
+        // **10.2. Update Summary Cards (if they exist)**
+        var totalUsageEl = document.getElementById('totalUsage');
+        var uniqueVoicesEl = document.getElementById('uniqueVoices');
+        var currentMonthUsageEl = document.getElementById('currentMonthUsage');
+
+        if (totalUsageEl) totalUsageEl.textContent = totalUsage.toLocaleString();
+        if (uniqueVoicesEl) uniqueVoicesEl.textContent = uniqueVoicesSet.size;
+        if (currentMonthUsageEl) currentMonthUsageEl.textContent = currentMonthUsage.toLocaleString();
+
+        console.log('Usage stats - Total:', totalUsage, 'This month:', currentMonthUsage, 'Voice types:', uniqueVoicesSet.size);
 
         // **10.3. Prepare Data for Charts**
         const usageData = {};
@@ -1101,7 +1190,9 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
     }
 
     function renderUsageChart(data) {
-        const ctx = document.getElementById('usageChart').getContext('2d');
+        var chartEl = document.getElementById('usageChart');
+        if (!chartEl) return; // Chart element doesn't exist
+        var ctx = chartEl.getContext('2d');
         const labels = Object.keys(data).sort();
         const values = labels.map(label => data[label]);
 
@@ -1160,7 +1251,9 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
     }
 
     function renderVoiceTypeChart(data) {
-        const ctx = document.getElementById('voiceTypeChart').getContext('2d');
+        var chartEl = document.getElementById('voiceTypeChart');
+        if (!chartEl) return; // Chart element doesn't exist
+        var ctx = chartEl.getContext('2d');
         const labels = Object.keys(data);
         const values = labels.map(label => data[label]);
 
@@ -1201,7 +1294,8 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
     }
 
     function displayVoiceTypeConsumption(data) {
-        const voiceUsageContainer = document.getElementById('voiceUsageCards');
+        var voiceUsageContainer = document.getElementById('voiceUsageCards');
+        if (!voiceUsageContainer) return; // Element doesn't exist
         voiceUsageContainer.innerHTML = ''; // Clear existing content
 
         for (const [voiceType, count] of Object.entries(data)) {
@@ -1346,9 +1440,924 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         return `${year}-${month}`;
     }
 
+    // ==========================================================================
+    // GERMAN LESSONS INTEGRATION
+    // ==========================================================================
+
+    // Fetch available German lessons
+    async function loadGermanLessons() {
+        if (!germanLessonSelect) return;
+
+        try {
+            const response = await fetch('/german-lessons', {
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                console.log('German lessons not available');
+                return;
+            }
+
+            const data = await response.json();
+            if (data.success && data.lessons && data.lessons.length > 0) {
+                germanLessonSelect.innerHTML = '<option value="">Select a lesson...</option>';
+                data.lessons.forEach(lesson => {
+                    const option = document.createElement('option');
+                    option.value = lesson.filename;
+                    option.textContent = lesson.displayName;
+                    germanLessonSelect.appendChild(option);
+                });
+                console.log(`Loaded ${data.lessons.length} German lessons`);
+            } else {
+                // Hide the loader if no lessons available
+                const loader = document.querySelector('.german-lessons-loader');
+                if (loader) loader.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error loading German lessons:', error);
+            // Hide the loader on error
+            const loader = document.querySelector('.german-lessons-loader');
+            if (loader) loader.style.display = 'none';
+        }
+    }
+
+    // Load selected German lesson into text editor
+    async function loadSelectedGermanLesson() {
+        const filename = germanLessonSelect.value;
+        if (!filename) {
+            alert('Please select a lesson first.');
+            return;
+        }
+
+        loadGermanLessonBtn.disabled = true;
+        loadGermanLessonBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+
+        try {
+            const response = await fetch(`/german-lessons/${encodeURIComponent(filename)}`, {
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load lesson');
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                textEditor.value = data.content;
+                updateEditorCharCount();
+                updateShadowingVisibility();
+
+                // Set original filename for audio output
+                originalFileName = filename.replace('.txt', '');
+
+                // Auto-select German language
+                languageSelect.value = 'de-DE';
+                loadVoices();
+
+                console.log(`Loaded German lesson: ${filename}`);
+            } else {
+                throw new Error(data.error || 'Unknown error');
+            }
+        } catch (error) {
+            console.error('Error loading German lesson:', error);
+            alert('Error loading lesson: ' + error.message);
+        } finally {
+            loadGermanLessonBtn.disabled = false;
+            loadGermanLessonBtn.innerHTML = '<i class="fas fa-download"></i> Load';
+        }
+    }
+
+    // Event listener for load button
+    if (loadGermanLessonBtn) {
+        loadGermanLessonBtn.addEventListener('click', loadSelectedGermanLesson);
+    }
+
+    // Also allow double-click on select to load
+    if (germanLessonSelect) {
+        germanLessonSelect.addEventListener('dblclick', () => {
+            if (germanLessonSelect.value) {
+                loadSelectedGermanLesson();
+            }
+        });
+    }
+
+    // ==========================================================================
+    // SHADOWING PRACTICE MODE
+    // ==========================================================================
+
+    // Shadowing DOM Elements
+    const shadowingCard = document.getElementById('shadowingCard');
+    const shadowingLaunch = document.getElementById('shadowingLaunch');
+    const shadowingPlayer = document.getElementById('shadowingPlayer');
+    const startShadowingBtn = document.getElementById('startShadowingBtn');
+    const phraseList = document.getElementById('phraseList');
+    const gapIndicator = document.getElementById('gapIndicator');
+    const gapTimer = document.getElementById('gapTimer');
+    const shadowingAudio = document.getElementById('shadowingAudio');
+    const gapMultiplierSelect = document.getElementById('gapMultiplier');
+    const shadowingSpeedSelect = document.getElementById('shadowingSpeed');
+    const loopCountSelect = document.getElementById('loopCount');
+    const shadowingPrevBtn = document.getElementById('shadowingPrevBtn');
+    const shadowingPlayPauseBtn = document.getElementById('shadowingPlayPauseBtn');
+    const shadowingNextBtn = document.getElementById('shadowingNextBtn');
+    const shadowingRestartBtn = document.getElementById('shadowingRestartBtn');
+    const shadowingStopBtn = document.getElementById('shadowingStopBtn');
+    const currentPhraseNumSpan = document.getElementById('currentPhraseNum');
+    const totalPhrasesSpan = document.getElementById('totalPhrases');
+
+    // Shadowing State
+    let shadowingState = {
+        phrases: [],
+        currentIndex: 0,
+        isPlaying: false,
+        isPaused: false,
+        currentLoopIteration: 0,
+        gapTimeoutId: null,
+        gapIntervalId: null,
+        phraseAudioUrls: [], // Cache for generated audio URLs (fallback)
+        currentPhraseUrl: null,
+        // For using existing MP3
+        useExistingAudio: false,
+        phraseTimings: [], // [{start, end, duration}, ...]
+        fullAudioUrl: null
+    };
+
+    // Split text into phrases (sentences)
+    function splitIntoPhrases(text) {
+        // Split by sentence-ending punctuation, keeping the punctuation
+        const sentences = text.split(/(?<=[.!?])\s+/).filter(function(s) { return s.trim().length > 0; });
+        return sentences.map(function(s) { return s.trim(); });
+    }
+
+    // Detect silence gaps in audio using Web Audio API
+    // Returns array of timestamps where silences occur (phrase boundaries)
+    async function detectSilenceGaps(audioUrl, silenceThreshold, minSilenceDuration) {
+        silenceThreshold = silenceThreshold || 0.01; // Audio level below this = silence
+        minSilenceDuration = minSilenceDuration || 0.3; // Minimum silence length in seconds
+
+        console.log('Detecting silence gaps in audio...');
+
+        try {
+            var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            var response = await fetch(audioUrl);
+            var arrayBuffer = await response.arrayBuffer();
+            var audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            var channelData = audioBuffer.getChannelData(0); // Get first channel
+            var sampleRate = audioBuffer.sampleRate;
+            var totalDuration = audioBuffer.duration;
+
+            console.log('  Sample rate:', sampleRate, 'Duration:', totalDuration.toFixed(2) + 's');
+
+            // Analyze in chunks (every 10ms)
+            var chunkSize = Math.floor(sampleRate * 0.01); // 10ms chunks
+            var silenceGaps = [];
+            var inSilence = false;
+            var silenceStart = 0;
+
+            for (var i = 0; i < channelData.length; i += chunkSize) {
+                // Calculate RMS (root mean square) for this chunk
+                var sum = 0;
+                var chunkEnd = Math.min(i + chunkSize, channelData.length);
+                for (var j = i; j < chunkEnd; j++) {
+                    sum += channelData[j] * channelData[j];
+                }
+                var rms = Math.sqrt(sum / (chunkEnd - i));
+
+                var currentTime = i / sampleRate;
+
+                if (rms < silenceThreshold) {
+                    // In silence
+                    if (!inSilence) {
+                        inSilence = true;
+                        silenceStart = currentTime;
+                    }
+                } else {
+                    // In sound
+                    if (inSilence) {
+                        var silenceDuration = currentTime - silenceStart;
+                        if (silenceDuration >= minSilenceDuration) {
+                            // Found a significant silence gap
+                            silenceGaps.push({
+                                start: silenceStart,
+                                end: currentTime,
+                                midpoint: silenceStart + (silenceDuration / 2)
+                            });
+                        }
+                        inSilence = false;
+                    }
+                }
+            }
+
+            audioContext.close();
+
+            console.log('  Found ' + silenceGaps.length + ' silence gaps');
+            silenceGaps.forEach(function(gap, i) {
+                console.log('    Gap ' + (i+1) + ': ' + gap.start.toFixed(2) + 's - ' + gap.end.toFixed(2) + 's');
+            });
+
+            return {
+                gaps: silenceGaps,
+                totalDuration: totalDuration
+            };
+        } catch (error) {
+            console.error('Error detecting silence:', error);
+            return null;
+        }
+    }
+
+    // Build phrase timings from detected silence gaps
+    function buildTimingsFromSilence(silenceResult, phraseCount) {
+        if (!silenceResult || !silenceResult.gaps) {
+            return null;
+        }
+
+        var gaps = silenceResult.gaps;
+        var totalDuration = silenceResult.totalDuration;
+        var timings = [];
+
+        // Filter out leading silence (gap that starts at or very near 0)
+        // This happens when the audio file has silence before the first phrase
+        var filteredGaps = gaps.filter(function(gap) {
+            return gap.start > 0.1; // Ignore gaps in the first 100ms
+        });
+
+        console.log('  Filtered gaps (removed leading silence):', filteredGaps.length);
+
+        // First phrase: from 0 (or after leading silence) to first gap
+        var audioStart = 0;
+        if (gaps.length > 0 && gaps[0].start < 0.1) {
+            // There's leading silence - start after it
+            audioStart = gaps[0].end;
+            console.log('  Audio starts after leading silence at:', audioStart.toFixed(2) + 's');
+        }
+
+        var currentStart = audioStart;
+
+        for (var i = 0; i < phraseCount; i++) {
+            var timing;
+
+            if (i < filteredGaps.length) {
+                // End at the start of the silence gap
+                timing = {
+                    start: currentStart,
+                    end: filteredGaps[i].start,
+                    duration: filteredGaps[i].start - currentStart
+                };
+                // Next phrase starts after the silence gap
+                currentStart = filteredGaps[i].end;
+            } else {
+                // No more gaps - last phrase goes to end
+                timing = {
+                    start: currentStart,
+                    end: totalDuration,
+                    duration: totalDuration - currentStart
+                };
+            }
+
+            console.log('  Phrase ' + (i + 1) + ': ' + timing.start.toFixed(2) + 's - ' + timing.end.toFixed(2) + 's');
+            timings.push(timing);
+        }
+
+        return timings;
+    }
+
+    // Fallback: Estimate phrase timings based on character count (when silence detection fails)
+    function estimatePhraseTimings(phrases, speakingRate, totalDuration) {
+        // Calculate relative weights based on character count
+        var charCounts = phrases.map(function(phrase) {
+            return phrase.length;
+        });
+
+        var totalChars = charCounts.reduce(function(a, b) { return a + b; }, 0);
+
+        console.log('Fallback: Estimating timings from character count');
+        console.log('  Total characters:', totalChars);
+        console.log('  Total audio duration:', totalDuration, 'seconds');
+
+        // Build timing array - distribute total duration proportionally
+        var currentTime = 0;
+        var timings = phrases.map(function(phrase, i) {
+            var proportion = charCounts[i] / totalChars;
+            var duration = totalDuration * proportion;
+
+            var timing = {
+                start: currentTime,
+                end: currentTime + duration,
+                duration: duration
+            };
+
+            currentTime += duration;
+            return timing;
+        });
+
+        return timings;
+    }
+
+    // Show shadowing card when text OR audio is available
+    function updateShadowingVisibility() {
+        var text = '';
+        if (currentInputMode === 'editor') {
+            text = textEditor.value.trim();
+        } else {
+            text = textPreview.value.trim();
+        }
+
+        var hasSrc = mainAudioPlayer && mainAudioPlayer.src && mainAudioPlayer.src.length > 0 && !mainAudioPlayer.src.endsWith('/');
+        var hasDuration = mainAudioPlayer && mainAudioPlayer.duration && mainAudioPlayer.duration > 0 && !isNaN(mainAudioPlayer.duration);
+        var hasAudio = hasSrc && hasDuration;
+
+        // Show shadowing card if we have text OR audio
+        if ((text || hasAudio) && shadowingCard) {
+            shadowingCard.classList.add('show');
+            updateShadowingButtonState();
+        } else if (shadowingCard) {
+            shadowingCard.classList.remove('show');
+        }
+    }
+
+    // Update the Start Practice button based on audio availability
+    function updateShadowingButtonState() {
+        if (!startShadowingBtn) return;
+
+        var hasSrc = mainAudioPlayer.src && mainAudioPlayer.src.length > 0 && !mainAudioPlayer.src.endsWith('/');
+        var hasDuration = mainAudioPlayer.duration && mainAudioPlayer.duration > 0 && !isNaN(mainAudioPlayer.duration);
+        var hasAudio = hasSrc && hasDuration;
+
+        var text = '';
+        if (currentInputMode === 'editor') {
+            text = textEditor.value.trim();
+        } else {
+            text = textPreview.value.trim();
+        }
+
+        if (hasAudio && text) {
+            startShadowingBtn.innerHTML = '<i class="fas fa-play"></i> Start Practice (0 API calls)';
+            startShadowingBtn.title = 'Uses the already-generated audio with your text';
+        } else if (hasAudio) {
+            startShadowingBtn.innerHTML = '<i class="fas fa-play"></i> Start Practice (Audio Only)';
+            startShadowingBtn.title = 'Phrases will be auto-detected from silence gaps in the audio';
+        } else {
+            startShadowingBtn.innerHTML = '<i class="fas fa-play"></i> Start Practice';
+            startShadowingBtn.title = 'Generate audio first to avoid extra API calls';
+        }
+    }
+
+    // Listen for audio load to update button state and shadowing visibility
+    if (mainAudioPlayer) {
+        mainAudioPlayer.addEventListener('loadedmetadata', function() {
+            updateShadowingButtonState();
+            updateShadowingVisibility();
+        });
+        mainAudioPlayer.addEventListener('loadeddata', function() {
+            updateShadowingButtonState();
+            updateShadowingVisibility();
+        });
+    }
+
+    // Listen for text changes
+    if (textEditor) {
+        textEditor.addEventListener('input', updateShadowingVisibility);
+    }
+    if (textPreview) {
+        const observer = new MutationObserver(updateShadowingVisibility);
+        observer.observe(textPreview, { attributes: true, childList: true, characterData: true });
+        // Also check on value change
+        textPreview.addEventListener('change', updateShadowingVisibility);
+    }
+
+    // Initialize shadowing session
+    function initShadowing() {
+        var text = '';
+        if (currentInputMode === 'editor') {
+            text = textEditor.value.trim();
+        } else {
+            text = textPreview.value.trim();
+        }
+
+        // Check if we have audio loaded
+        var hasSrc = mainAudioPlayer.src && mainAudioPlayer.src.length > 0 && !mainAudioPlayer.src.endsWith('/');
+        var hasDuration = mainAudioPlayer.duration && mainAudioPlayer.duration > 0 && !isNaN(mainAudioPlayer.duration);
+        var hasAudio = hasSrc && hasDuration;
+
+        // Need either text or audio
+        if (!text && !hasAudio) {
+            alert('Please enter some text or load an audio file first.');
+            return;
+        }
+
+        // If no audio but has text, need a voice selected
+        if (!hasAudio && text) {
+            var voice = voiceSelect.value;
+            if (!voice) {
+                alert('Please select a voice first.');
+                return;
+            }
+        }
+
+        // Audio-only mode: will detect phrases from silence
+        var audioOnlyMode = hasAudio && !text;
+
+        // Split into phrases (or create placeholder for audio-only mode)
+        if (text) {
+            shadowingState.phrases = splitIntoPhrases(text);
+        } else {
+            // Will be populated after silence detection
+            shadowingState.phrases = [];
+        }
+
+        shadowingState.currentIndex = 0;
+        shadowingState.isPlaying = false;
+        shadowingState.isPaused = false;
+        shadowingState.currentLoopIteration = 0;
+        shadowingState.audioOnlyMode = audioOnlyMode;
+        shadowingState.phraseAudioUrls = [];
+
+        // Use the audio we already checked
+        var existingAudioSrc = mainAudioPlayer.src;
+
+        console.log('Shadowing init:');
+        console.log('  Audio source:', existingAudioSrc);
+        console.log('  Audio duration:', mainAudioPlayer.duration);
+        console.log('  Audio-only mode:', audioOnlyMode);
+        console.log('  Text phrases:', shadowingState.phrases.length);
+
+        if (hasAudio) {
+            // Use existing MP3 - ZERO API CALLS!
+            shadowingState.useExistingAudio = true;
+            shadowingState.fullAudioUrl = existingAudioSrc;
+            shadowingAudio.src = existingAudioSrc;
+
+            console.log('Shadowing: Using loaded audio (0 API calls!)');
+            console.log('Analyzing audio for phrase boundaries...');
+
+            // Show loading state
+            startShadowingBtn.disabled = true;
+            startShadowingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing audio...';
+
+            // Use silence detection to find exact phrase boundaries
+            detectSilenceGaps(existingAudioSrc).then(function(silenceResult) {
+                startShadowingBtn.disabled = false;
+                updateShadowingButtonState();
+
+                if (silenceResult && silenceResult.gaps.length > 0) {
+                    // For audio-only mode, create phrases from detected gaps
+                    if (audioOnlyMode) {
+                        var numPhrases = silenceResult.gaps.length + 1;
+                        shadowingState.phrases = [];
+                        for (var p = 1; p <= numPhrases; p++) {
+                            shadowingState.phrases.push('Phrase ' + p);
+                        }
+                        console.log('Audio-only mode: Created ' + numPhrases + ' phrases from silence detection');
+                    }
+
+                    // Build timings from detected silence gaps
+                    shadowingState.phraseTimings = buildTimingsFromSilence(
+                        silenceResult,
+                        shadowingState.phrases.length
+                    );
+                    console.log('Phrase timings from silence detection:', shadowingState.phraseTimings);
+
+                    // Re-render phrase list now that we have phrases
+                    renderPhraseList();
+                    totalPhrasesSpan.textContent = shadowingState.phrases.length;
+                } else if (!audioOnlyMode) {
+                    // No gaps found but we have text - fallback to character-based estimation
+                    console.log('No silence gaps found, falling back to estimation');
+                    var speakingRate = parseFloat(speakingRateInput.value) || 1.0;
+                    shadowingState.phraseTimings = estimatePhraseTimings(
+                        shadowingState.phrases,
+                        speakingRate,
+                        mainAudioPlayer.duration
+                    );
+                } else {
+                    // Audio-only with no gaps - create a single phrase for whole audio
+                    console.log('No silence gaps found in audio-only mode, using entire audio as one phrase');
+                    shadowingState.phrases = ['Full Audio'];
+                    shadowingState.phraseTimings = [{
+                        start: 0,
+                        end: mainAudioPlayer.duration,
+                        duration: mainAudioPlayer.duration
+                    }];
+                    renderPhraseList();
+                    totalPhrasesSpan.textContent = '1';
+                }
+            }).catch(function(error) {
+                console.error('Silence detection failed:', error);
+                startShadowingBtn.disabled = false;
+                updateShadowingButtonState();
+
+                if (!audioOnlyMode) {
+                    // Fallback to character-based estimation
+                    var speakingRate = parseFloat(speakingRateInput.value) || 1.0;
+                    shadowingState.phraseTimings = estimatePhraseTimings(
+                        shadowingState.phrases,
+                        speakingRate,
+                        mainAudioPlayer.duration
+                    );
+                } else {
+                    // Audio-only fallback - use entire audio
+                    shadowingState.phrases = ['Full Audio'];
+                    shadowingState.phraseTimings = [{
+                        start: 0,
+                        end: mainAudioPlayer.duration,
+                        duration: mainAudioPlayer.duration
+                    }];
+                    renderPhraseList();
+                    totalPhrasesSpan.textContent = '1';
+                }
+            });
+        } else {
+            // No existing audio - will need to generate per phrase (uses API)
+            shadowingState.useExistingAudio = false;
+            shadowingState.phraseTimings = [];
+            console.log('Shadowing: No audio loaded, will generate phrases individually');
+        }
+
+        // Populate phrase list (may be re-rendered after silence detection in audio-only mode)
+        renderPhraseList();
+
+        // Update UI
+        shadowingLaunch.style.display = 'none';
+        shadowingPlayer.classList.add('active');
+        totalPhrasesSpan.textContent = shadowingState.phrases.length || '?';
+        currentPhraseNumSpan.textContent = '1';
+
+        console.log('Shadowing initialized');
+    }
+
+    // Render phrase list
+    function renderPhraseList() {
+        phraseList.innerHTML = '';
+        shadowingState.phrases.forEach((phrase, index) => {
+            const div = document.createElement('div');
+            div.className = 'phrase-item' + (index === shadowingState.currentIndex ? ' current' : '');
+            div.innerHTML = `
+                <span class="phrase-number">${index + 1}</span>
+                <span class="phrase-text">${escapeHtml(phrase)}</span>
+                <span class="phrase-status">${index < shadowingState.currentIndex ? 'Done' : (index === shadowingState.currentIndex ? 'Current' : '')}</span>
+            `;
+            div.addEventListener('click', () => jumpToPhrase(index));
+            phraseList.appendChild(div);
+        });
+    }
+
+    // Helper to escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Update phrase list highlighting
+    function updatePhraseListUI() {
+        const items = phraseList.querySelectorAll('.phrase-item');
+        items.forEach((item, index) => {
+            item.classList.remove('current', 'completed');
+            const statusSpan = item.querySelector('.phrase-status');
+            if (index < shadowingState.currentIndex) {
+                item.classList.add('completed');
+                statusSpan.textContent = 'Done';
+            } else if (index === shadowingState.currentIndex) {
+                item.classList.add('current');
+                statusSpan.textContent = 'Current';
+                // Scroll into view
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                statusSpan.textContent = '';
+            }
+        });
+        currentPhraseNumSpan.textContent = shadowingState.currentIndex + 1;
+    }
+
+    // Generate audio for a phrase using test-voice endpoint
+    async function generatePhraseAudio(phrase) {
+        const voice = voiceSelect.value;
+        const language = languageSelect.value;
+        const speed = parseFloat(shadowingSpeedSelect.value) || 1.0;
+
+        try {
+            const response = await fetch('/test-voice', {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({
+                    language: language,
+                    voice: voice,
+                    speakingRate: speed,
+                    pitch: parseFloat(pitchInput.value) || 0,
+                    customText: phrase,
+                    useSsml: false
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate phrase audio');
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                const audioBlob = base64ToBlob(result.audioContent, 'audio/mp3');
+                return URL.createObjectURL(audioBlob);
+            }
+            throw new Error(result.error || 'Unknown error');
+        } catch (error) {
+            console.error('Error generating phrase audio:', error);
+            return null;
+        }
+    }
+
+    // Play current phrase
+    async function playCurrentPhrase() {
+        if (shadowingState.currentIndex >= shadowingState.phrases.length) {
+            // End of session
+            endShadowing();
+            return;
+        }
+
+        const phrase = shadowingState.phrases[shadowingState.currentIndex];
+        shadowingState.isPlaying = true;
+        updatePlayPauseButton();
+
+        // Show which phrase is playing
+        gapIndicator.classList.remove('show');
+        updatePhraseListUI();
+
+        // Check if using existing MP3 (zero API calls path)
+        if (shadowingState.useExistingAudio && shadowingState.phraseTimings.length > 0) {
+            const timing = shadowingState.phraseTimings[shadowingState.currentIndex];
+            if (timing) {
+                // Seek to phrase start position and play
+                shadowingAudio.currentTime = timing.start;
+
+                // Set up handler to stop at phrase end
+                var onTimeUpdate = function() {
+                    if (shadowingAudio.currentTime >= timing.end) {
+                        shadowingAudio.removeEventListener('timeupdate', onTimeUpdate);
+                        shadowingAudio.pause();
+                        // Manually trigger the gap (since 'ended' won't fire)
+                        if (shadowingState.isPlaying && !shadowingState.isPaused) {
+                            startGapWithDuration(timing.duration);
+                        }
+                    }
+                };
+                shadowingAudio.addEventListener('timeupdate', onTimeUpdate);
+                shadowingState.currentTimeUpdateHandler = onTimeUpdate;
+
+                shadowingAudio.play();
+                console.log('Playing phrase ' + (shadowingState.currentIndex + 1) +
+                    ' from ' + timing.start.toFixed(2) + 's to ' + timing.end.toFixed(2) + 's');
+                return;
+            }
+        }
+
+        // Fallback: Generate audio for this phrase (uses API)
+        var audioUrl = shadowingState.phraseAudioUrls[shadowingState.currentIndex];
+        if (!audioUrl) {
+            // Show loading state
+            var currentItem = phraseList.querySelector('.phrase-item.current .phrase-status');
+            if (currentItem) currentItem.textContent = 'Loading...';
+
+            audioUrl = await generatePhraseAudio(phrase);
+            if (audioUrl) {
+                shadowingState.phraseAudioUrls[shadowingState.currentIndex] = audioUrl;
+            } else {
+                // Error generating audio, skip to next
+                console.error('Could not generate audio for phrase:', phrase);
+                shadowingState.currentIndex++;
+                playCurrentPhrase();
+                return;
+            }
+        }
+
+        // Play the audio
+        shadowingAudio.src = audioUrl;
+        shadowingAudio.playbackRate = 1.0; // Speed already applied in TTS
+        shadowingAudio.play();
+    }
+
+    // Start gap with specified duration (for existing audio mode)
+    function startGapWithDuration(phraseDuration) {
+        var gapMultiplier = parseFloat(gapMultiplierSelect.value) || 1.5;
+        var gapDuration = phraseDuration * gapMultiplier;
+
+        gapIndicator.classList.add('show');
+
+        var remainingTime = gapDuration;
+        gapTimer.textContent = remainingTime.toFixed(1) + 's';
+
+        // Countdown timer
+        shadowingState.gapIntervalId = setInterval(function() {
+            remainingTime -= 0.1;
+            if (remainingTime > 0) {
+                gapTimer.textContent = remainingTime.toFixed(1) + 's';
+            }
+        }, 100);
+
+        // After gap, move to next phrase
+        shadowingState.gapTimeoutId = setTimeout(function() {
+            clearInterval(shadowingState.gapIntervalId);
+            gapIndicator.classList.remove('show');
+
+            // Handle looping
+            var loopCount = parseInt(loopCountSelect.value);
+            shadowingState.currentLoopIteration++;
+
+            if (loopCount === 0 || shadowingState.currentLoopIteration < loopCount) {
+                // Repeat current phrase
+                playCurrentPhrase();
+            } else {
+                // Move to next phrase
+                shadowingState.currentLoopIteration = 0;
+                shadowingState.currentIndex++;
+                playCurrentPhrase();
+            }
+        }, gapDuration * 1000);
+    }
+
+    // Handle audio ended - start gap
+    if (shadowingAudio) {
+        shadowingAudio.addEventListener('ended', () => {
+            if (!shadowingState.isPlaying) return;
+            startGap();
+        });
+    }
+
+    // Start gap (silence for user to repeat)
+    function startGap() {
+        const gapMultiplier = parseFloat(gapMultiplierSelect.value) || 1.5;
+        const phraseDuration = shadowingAudio.duration || 2;
+        const gapDuration = phraseDuration * gapMultiplier;
+
+        gapIndicator.classList.add('show');
+
+        let remainingTime = gapDuration;
+        gapTimer.textContent = remainingTime.toFixed(1) + 's';
+
+        // Countdown timer
+        shadowingState.gapIntervalId = setInterval(() => {
+            remainingTime -= 0.1;
+            if (remainingTime > 0) {
+                gapTimer.textContent = remainingTime.toFixed(1) + 's';
+            }
+        }, 100);
+
+        // After gap, move to next phrase
+        shadowingState.gapTimeoutId = setTimeout(() => {
+            clearInterval(shadowingState.gapIntervalId);
+            gapIndicator.classList.remove('show');
+
+            // Handle looping
+            const loopCount = parseInt(loopCountSelect.value);
+            shadowingState.currentLoopIteration++;
+
+            if (loopCount === 0 || shadowingState.currentLoopIteration < loopCount) {
+                // Repeat current phrase
+                playCurrentPhrase();
+            } else {
+                // Move to next phrase
+                shadowingState.currentLoopIteration = 0;
+                shadowingState.currentIndex++;
+                playCurrentPhrase();
+            }
+        }, gapDuration * 1000);
+    }
+
+    // Clear gap timers
+    function clearGapTimers() {
+        if (shadowingState.gapTimeoutId) {
+            clearTimeout(shadowingState.gapTimeoutId);
+            shadowingState.gapTimeoutId = null;
+        }
+        if (shadowingState.gapIntervalId) {
+            clearInterval(shadowingState.gapIntervalId);
+            shadowingState.gapIntervalId = null;
+        }
+    }
+
+    // Update play/pause button
+    function updatePlayPauseButton() {
+        const icon = shadowingPlayPauseBtn.querySelector('i');
+        if (shadowingState.isPlaying && !shadowingState.isPaused) {
+            icon.className = 'fas fa-pause';
+        } else {
+            icon.className = 'fas fa-play';
+        }
+    }
+
+    // Play/Pause toggle
+    function togglePlayPause() {
+        if (!shadowingState.isPlaying) {
+            // Start playing
+            playCurrentPhrase();
+        } else if (shadowingState.isPaused) {
+            // Resume
+            shadowingState.isPaused = false;
+            shadowingAudio.play();
+            updatePlayPauseButton();
+        } else {
+            // Pause
+            shadowingState.isPaused = true;
+            shadowingAudio.pause();
+            clearGapTimers();
+            gapIndicator.classList.remove('show');
+            updatePlayPauseButton();
+        }
+    }
+
+    // Jump to specific phrase
+    function jumpToPhrase(index) {
+        clearGapTimers();
+        // Remove any existing timeupdate handler
+        if (shadowingState.currentTimeUpdateHandler) {
+            shadowingAudio.removeEventListener('timeupdate', shadowingState.currentTimeUpdateHandler);
+            shadowingState.currentTimeUpdateHandler = null;
+        }
+        shadowingAudio.pause();
+        gapIndicator.classList.remove('show');
+
+        shadowingState.currentIndex = index;
+        shadowingState.currentLoopIteration = 0;
+        updatePhraseListUI();
+
+        if (shadowingState.isPlaying && !shadowingState.isPaused) {
+            playCurrentPhrase();
+        }
+    }
+
+    // Previous phrase
+    function prevPhrase() {
+        if (shadowingState.currentIndex > 0) {
+            jumpToPhrase(shadowingState.currentIndex - 1);
+        }
+    }
+
+    // Next phrase
+    function nextPhrase() {
+        if (shadowingState.currentIndex < shadowingState.phrases.length - 1) {
+            jumpToPhrase(shadowingState.currentIndex + 1);
+        }
+    }
+
+    // Restart from beginning
+    function restartShadowing() {
+        jumpToPhrase(0);
+    }
+
+    // End shadowing session
+    function endShadowing() {
+        shadowingState.isPlaying = false;
+        shadowingState.isPaused = false;
+        clearGapTimers();
+        // Remove any existing timeupdate handler
+        if (shadowingState.currentTimeUpdateHandler) {
+            shadowingAudio.removeEventListener('timeupdate', shadowingState.currentTimeUpdateHandler);
+            shadowingState.currentTimeUpdateHandler = null;
+        }
+        shadowingAudio.pause();
+        gapIndicator.classList.remove('show');
+        updatePlayPauseButton();
+        console.log('Shadowing session complete!');
+    }
+
+    // Stop and close shadowing
+    function stopShadowing() {
+        endShadowing();
+
+        // Clean up audio URLs
+        shadowingState.phraseAudioUrls.forEach(url => {
+            if (url) URL.revokeObjectURL(url);
+        });
+        shadowingState.phraseAudioUrls = [];
+
+        // Reset UI
+        shadowingPlayer.classList.remove('active');
+        shadowingLaunch.style.display = 'flex';
+    }
+
+    // Event listeners for shadowing controls
+    if (startShadowingBtn) {
+        startShadowingBtn.addEventListener('click', initShadowing);
+    }
+    if (shadowingPlayPauseBtn) {
+        shadowingPlayPauseBtn.addEventListener('click', togglePlayPause);
+    }
+    if (shadowingPrevBtn) {
+        shadowingPrevBtn.addEventListener('click', prevPhrase);
+    }
+    if (shadowingNextBtn) {
+        shadowingNextBtn.addEventListener('click', nextPhrase);
+    }
+    if (shadowingRestartBtn) {
+        shadowingRestartBtn.addEventListener('click', restartShadowing);
+    }
+    if (shadowingStopBtn) {
+        shadowingStopBtn.addEventListener('click', stopShadowing);
+    }
+
     // **11. Initialize by Loading Voices and Fetching Usage Stats**
     loadVoices();
     fetchUsageStats();
+    loadGermanLessons();
 
     // **Helper Function to Convert Base64 to Blob**
     function base64ToBlob(base64, mime) {

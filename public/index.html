@@ -181,7 +181,8 @@
             border-radius: var(--radius-md);
             padding: var(--space-md);
             box-shadow: var(--shadow-lg);
-            min-width: 200px;
+            min-width: 280px;
+            max-width: 320px;
             z-index: 100;
         }
 
@@ -197,11 +198,59 @@
         }
 
         .usage-tooltip-item {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: var(--space-sm);
+            align-items: center;
             font-size: 0.75rem;
             color: var(--text-secondary);
             padding: var(--space-xs) 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .usage-tooltip-item:last-child {
+            border-bottom: none;
+        }
+
+        .usage-month {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding-bottom: var(--space-xs);
+            margin-bottom: var(--space-xs);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .voice-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .voice-usage {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .voice-pct {
+            font-weight: 600;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: var(--radius-full);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+        }
+
+        .voice-pct.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .voice-pct.danger {
+            background: #fee2e2;
+            color: #991b1b;
         }
 
         /* ============================================
@@ -311,6 +360,44 @@
            ============================================ */
         #textEditorContainer {
             display: none;
+        }
+
+        /* German Lessons Loader */
+        .german-lessons-loader {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #f59e0b;
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin-bottom: var(--space-md);
+        }
+
+        .german-lessons-loader .loader-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: var(--space-sm);
+        }
+
+        .german-lessons-loader .loader-header i {
+            color: #d97706;
+        }
+
+        .german-lessons-loader .loader-controls {
+            display: flex;
+            gap: var(--space-sm);
+            align-items: center;
+        }
+
+        .german-lessons-loader .loader-controls select {
+            flex: 1;
+            background: white;
+        }
+
+        .german-lessons-loader .loader-controls .btn {
+            white-space: nowrap;
         }
 
         .ssml-toolbar {
@@ -700,10 +787,6 @@
            OUTPUT CARD
            ============================================ */
         .output-card {
-            display: none;
-        }
-
-        .output-card.show {
             display: block;
         }
 
@@ -793,6 +876,22 @@
             font-size: 0.75rem;
         }
 
+        .text-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            background: #f0fdf4;
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-sm);
+            font-size: 0.875rem;
+            color: #166534;
+        }
+
+        .text-info i {
+            color: var(--success);
+        }
+
         /* Test audio section */
         #testSentence {
             font-size: 0.875rem;
@@ -864,6 +963,241 @@
                 justify-content: center;
             }
         }
+
+        /* ============================================
+           SHADOWING PRACTICE MODE
+           ============================================ */
+        .shadowing-card {
+            display: none;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-color: var(--success);
+        }
+
+        .shadowing-card.show {
+            display: block;
+        }
+
+        .shadowing-card .card-header {
+            color: #166534;
+        }
+
+        .shadowing-card .card-header i {
+            color: var(--success);
+        }
+
+        .shadowing-launch {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-md);
+        }
+
+        .shadowing-launch-info {
+            flex: 1;
+        }
+
+        .shadowing-launch-info h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: var(--space-xs);
+        }
+
+        .shadowing-launch-info p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .btn-shadowing {
+            background: var(--success);
+            color: white;
+            padding: var(--space-sm) var(--space-md);
+            white-space: nowrap;
+        }
+
+        .btn-shadowing:hover {
+            background: #059669;
+        }
+
+        /* Shadowing Player */
+        .shadowing-player {
+            display: none;
+        }
+
+        .shadowing-player.active {
+            display: block;
+        }
+
+        .phrase-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: var(--space-md);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: white;
+        }
+
+        .phrase-item {
+            padding: var(--space-sm) var(--space-md);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .phrase-item:last-child {
+            border-bottom: none;
+        }
+
+        .phrase-item:hover {
+            background: var(--bg-secondary);
+        }
+
+        .phrase-item.current {
+            background: #dcfce7;
+            color: #166534;
+            font-weight: 500;
+        }
+
+        .phrase-item.completed {
+            color: var(--text-muted);
+        }
+
+        .phrase-item .phrase-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .phrase-item.current .phrase-number {
+            background: var(--success);
+            color: white;
+        }
+
+        .phrase-item.completed .phrase-number {
+            background: var(--text-muted);
+            color: white;
+        }
+
+        .phrase-item .phrase-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .phrase-item .phrase-status {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: var(--radius-full);
+            background: var(--border);
+        }
+
+        .phrase-item.current .phrase-status {
+            background: var(--success);
+            color: white;
+        }
+
+        /* Gap Indicator */
+        .gap-indicator {
+            display: none;
+            text-align: center;
+            padding: var(--space-lg);
+            background: #fef3c7;
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-md);
+        }
+
+        .gap-indicator.show {
+            display: block;
+        }
+
+        .gap-indicator i {
+            font-size: 2rem;
+            color: #d97706;
+            margin-bottom: var(--space-sm);
+        }
+
+        .gap-indicator p {
+            font-size: 0.875rem;
+            color: #92400e;
+            margin: 0;
+        }
+
+        .gap-timer {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #d97706;
+        }
+
+        /* Shadowing Controls */
+        .shadowing-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .shadowing-settings {
+            display: flex;
+            gap: var(--space-lg);
+            flex-wrap: wrap;
+        }
+
+        .shadowing-setting {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .shadowing-setting label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .shadowing-setting select,
+        .shadowing-setting input[type="number"] {
+            padding: var(--space-xs) var(--space-sm);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            width: 70px;
+        }
+
+        .shadowing-buttons {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-sm);
+        }
+
+        .shadowing-buttons .btn {
+            padding: var(--space-sm) var(--space-md);
+        }
+
+        .shadowing-buttons .btn i {
+            margin-right: var(--space-xs);
+        }
+
+        .shadowing-progress {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
@@ -925,6 +1259,22 @@
 
                 <!-- Text Editor Section -->
                 <div id="textEditorContainer">
+                    <!-- German Lessons Loader -->
+                    <div class="german-lessons-loader">
+                        <div class="loader-header">
+                            <i class="fas fa-book-open"></i>
+                            <span>Load German Lesson</span>
+                        </div>
+                        <div class="loader-controls">
+                            <select class="form-select" id="germanLessonSelect">
+                                <option value="">Select a lesson...</option>
+                            </select>
+                            <button type="button" class="btn btn-secondary btn-sm" id="loadGermanLesson">
+                                <i class="fas fa-download"></i> Load
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="ssml-toolbar">
                         <button type="button" class="toolbar-btn" id="ssmlPause" title="Insert pause">
                             <i class="fas fa-pause"></i> Pause
@@ -1097,18 +1447,19 @@ Select text and use the toolbar buttons above!"
         <div class="card output-card" id="outputCard">
             <div class="card-header">
                 <i class="fas fa-volume-up"></i>
-                <span>Output</span>
+                <span>Output / Import</span>
             </div>
 
             <div id="result"></div>
 
             <div class="audio-player-wrapper">
                 <input type="file" id="audioFileInput" accept="audio/*" hidden />
+                <input type="file" id="practiceTextFileInput" accept=".txt" hidden />
 
                 <div id="audioDropZone">
-                    <i class="fas fa-music"></i>
-                    <p>Drop an audio file here or click to upload</p>
-                    <small>MP3, WAV, OGG, M4A</small>
+                    <i class="fas fa-file-import"></i>
+                    <p>Drop files here for shadowing practice</p>
+                    <small>Audio (MP3, WAV) + Text (.txt) - or just audio</small>
                 </div>
 
                 <div id="audioFileInfo" style="display: none;">
@@ -1116,7 +1467,103 @@ Select text and use the toolbar buttons above!"
                         <i class="fas fa-file-audio"></i>
                         <span id="audioFileName">No file loaded</span>
                     </div>
+                    <div class="text-info" id="practiceTextInfo" style="display: none;">
+                        <i class="fas fa-file-alt"></i>
+                        <span id="practiceTextFileName">No text loaded</span>
+                    </div>
                     <audio id="mainAudioPlayer" controls></audio>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 6: Shadowing Practice -->
+        <div class="card shadowing-card" id="shadowingCard">
+            <div class="card-header">
+                <i class="fas fa-headphones"></i>
+                <span>Shadowing Practice</span>
+            </div>
+
+            <!-- Launch Section -->
+            <div class="shadowing-launch" id="shadowingLaunch">
+                <div class="shadowing-launch-info">
+                    <h4>Practice speaking with phrase-by-phrase playback</h4>
+                    <p>Listen to each phrase, then repeat during the gap. Perfect for improving pronunciation and fluency.</p>
+                </div>
+                <button type="button" class="btn btn-shadowing" id="startShadowingBtn">
+                    <i class="fas fa-play"></i> Start Practice
+                </button>
+            </div>
+
+            <!-- Active Player Section -->
+            <div class="shadowing-player" id="shadowingPlayer">
+                <!-- Phrase List -->
+                <div class="phrase-list" id="phraseList">
+                    <!-- Phrases will be populated dynamically -->
+                </div>
+
+                <!-- Gap Indicator -->
+                <div class="gap-indicator" id="gapIndicator">
+                    <i class="fas fa-microphone"></i>
+                    <p>Your turn! Repeat the phrase</p>
+                    <div class="gap-timer" id="gapTimer">3.0s</div>
+                </div>
+
+                <!-- Hidden audio element for phrase playback -->
+                <audio id="shadowingAudio" style="display: none;"></audio>
+
+                <!-- Controls -->
+                <div class="shadowing-controls">
+                    <div class="shadowing-settings">
+                        <div class="shadowing-setting">
+                            <label for="gapMultiplier">Gap Duration:</label>
+                            <select id="gapMultiplier">
+                                <option value="1.0">1.0x</option>
+                                <option value="1.5" selected>1.5x</option>
+                                <option value="2.0">2.0x</option>
+                                <option value="2.5">2.5x</option>
+                                <option value="3.0">3.0x</option>
+                            </select>
+                        </div>
+                        <div class="shadowing-setting">
+                            <label for="shadowingSpeed">Speed:</label>
+                            <select id="shadowingSpeed">
+                                <option value="0.7">0.7x (Slow)</option>
+                                <option value="0.85">0.85x</option>
+                                <option value="1.0" selected>1.0x (Normal)</option>
+                            </select>
+                        </div>
+                        <div class="shadowing-setting">
+                            <label for="loopCount">Repeat:</label>
+                            <select id="loopCount">
+                                <option value="1" selected>1x</option>
+                                <option value="2">2x</option>
+                                <option value="3">3x</option>
+                                <option value="0">Loop ∞</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="shadowing-buttons">
+                        <button type="button" class="btn btn-secondary" id="shadowingPrevBtn" title="Previous phrase">
+                            <i class="fas fa-step-backward"></i>
+                        </button>
+                        <button type="button" class="btn btn-primary" id="shadowingPlayPauseBtn" title="Play/Pause">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="shadowingNextBtn" title="Next phrase">
+                            <i class="fas fa-step-forward"></i>
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="shadowingRestartBtn" title="Restart">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="shadowingStopBtn" title="Stop & Close">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                    </div>
+
+                    <div class="shadowing-progress" id="shadowingProgress">
+                        Phrase <span id="currentPhraseNum">0</span> of <span id="totalPhrases">0</span>
+                    </div>
                 </div>
             </div>
         </div>

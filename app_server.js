@@ -632,6 +632,87 @@ app.get('/dashboard', apiKeyAuthMiddleware, async (req, res) => {
     }
 });
 
+// =============================================================================
+// GERMAN LESSONS INTEGRATION
+// =============================================================================
+
+// Path to German lessons directory (sibling project)
+const GERMAN_LESSONS_PATH = path.join(__dirname, '..', 'german', 'lessons');
+
+// **13. List German Lessons Endpoint**
+// Protected by API key authentication
+app.get('/german-lessons', apiKeyAuthMiddleware, async (req, res) => {
+    try {
+        const files = await fs.readdir(GERMAN_LESSONS_PATH);
+        const lessonFiles = files
+            .filter(f => f.endsWith('.txt'))
+            .map(f => {
+                // Extract lesson number or name for display
+                const name = f.replace('.txt', '');
+                let displayName = name;
+
+                // Format display names nicely
+                if (name.match(/^\d+_stackable$/)) {
+                    displayName = `Lesson ${name.split('_')[0]}`;
+                } else if (name === 'a2_capstone_stackable') {
+                    displayName = 'A2 Capstone Review';
+                } else if (name.match(/lesson_\d+_generated/)) {
+                    displayName = `Generated Lesson ${name.match(/\d+/)[0]}`;
+                }
+
+                return { filename: f, displayName };
+            })
+            .sort((a, b) => {
+                // Sort numerically where possible
+                const matchA = a.filename.match(/\d+/);
+                const matchB = b.filename.match(/\d+/);
+                const numA = matchA ? parseInt(matchA[0]) : 999;
+                const numB = matchB ? parseInt(matchB[0]) : 999;
+                return numA - numB;
+            });
+
+        console.log(`Found ${lessonFiles.length} German lesson files`);
+        res.json({ success: true, lessons: lessonFiles });
+    } catch (error) {
+        console.error("Error listing German lessons:", error);
+        // Return empty list if directory doesn't exist
+        if (error.code === 'ENOENT') {
+            return res.json({ success: true, lessons: [], message: 'German lessons directory not found' });
+        }
+        return sendError(res, 500, error);
+    }
+});
+
+// **14. Get German Lesson Content Endpoint**
+// Protected by API key authentication
+app.get('/german-lessons/:filename', apiKeyAuthMiddleware, async (req, res) => {
+    try {
+        const filename = req.params.filename;
+
+        // Security: prevent directory traversal
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return res.status(400).json({ success: false, error: 'Invalid filename' });
+        }
+
+        // Only allow .txt files
+        if (!filename.endsWith('.txt')) {
+            return res.status(400).json({ success: false, error: 'Only .txt files are allowed' });
+        }
+
+        const filePath = path.join(GERMAN_LESSONS_PATH, filename);
+        const content = await fs.readFile(filePath, 'utf8');
+
+        console.log(`Loaded German lesson: ${filename} (${content.length} characters)`);
+        res.json({ success: true, filename, content });
+    } catch (error) {
+        console.error("Error loading German lesson:", error);
+        if (error.code === 'ENOENT') {
+            return res.status(404).json({ success: false, error: 'Lesson file not found' });
+        }
+        return sendError(res, 500, error);
+    }
+});
+
 // **Function to Count Characters in SSML Input**
 function countCharactersInSsml(ssmlText) {
     // Remove SSML tags
