@@ -2354,10 +2354,662 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         shadowingStopBtn.addEventListener('click', stopShadowing);
     }
 
+    // ==========================================================================
+    // DICTATION PRACTICE MODE
+    // ==========================================================================
+
+    // Dictation DOM Elements
+    var dictationCard = document.getElementById('dictationCard');
+    var dictationLaunch = document.getElementById('dictationLaunch');
+    var dictationPlayer = document.getElementById('dictationPlayer');
+    var startDictationBtn = document.getElementById('startDictationBtn');
+    var dictationPlayBtn = document.getElementById('dictationPlayBtn');
+    var dictationInput = document.getElementById('dictationInput');
+    var dictationCheckBtn = document.getElementById('dictationCheckBtn');
+    var dictationSkipBtn = document.getElementById('dictationSkipBtn');
+    var dictationNextBtn = document.getElementById('dictationNextBtn');
+    var dictationStopBtn = document.getElementById('dictationStopBtn');
+    var dictationRestartBtn = document.getElementById('dictationRestartBtn');
+    var dictationCloseBtn = document.getElementById('dictationCloseBtn');
+    var replayCorrectBtn = document.getElementById('replayCorrectBtn');
+    var dictationAudio = document.getElementById('dictationAudio');
+    var dictationSpeedSelect = document.getElementById('dictationSpeed');
+
+    // Dictation Display Elements
+    var dictationProgressFill = document.getElementById('dictationProgressFill');
+    var dictationCurrentNum = document.getElementById('dictationCurrentNum');
+    var dictationTotalNum = document.getElementById('dictationTotalNum');
+    var dictationScoreSpan = document.getElementById('dictationScore');
+    var replayCountSpan = document.getElementById('replayCount');
+    var dictationResult = document.getElementById('dictationResult');
+    var resultIcon = document.getElementById('resultIcon');
+    var resultLabel = document.getElementById('resultLabel');
+    var userAnswerDisplay = document.getElementById('userAnswerDisplay');
+    var correctAnswerDisplay = document.getElementById('correctAnswerDisplay');
+    var resultDiff = document.getElementById('resultDiff');
+    var dictationComplete = document.getElementById('dictationComplete');
+    var finalScoreSpan = document.getElementById('finalScore');
+    var phrasesCorrectSpan = document.getElementById('phrasesCorrect');
+
+    // Dictation State
+    var dictationState = {
+        phrases: [],
+        currentIndex: 0,
+        replaysLeft: 3,
+        maxReplays: 3,
+        scores: [], // Array of scores per phrase (0-100)
+        totalCorrect: 0,
+        isActive: false,
+        useExistingAudio: false,
+        phraseTimings: [],
+        fullAudioUrl: null,
+        currentPhraseAudioUrl: null
+    };
+
+    // Show dictation card when text or audio is available (same as shadowing)
+    function updateDictationVisibility() {
+        var text = '';
+        if (currentInputMode === 'editor') {
+            text = textEditor.value.trim();
+        } else {
+            text = textPreview.value.trim();
+        }
+
+        var hasSrc = mainAudioPlayer && mainAudioPlayer.src && mainAudioPlayer.src.length > 0 && !mainAudioPlayer.src.endsWith('/');
+        var hasDuration = mainAudioPlayer && mainAudioPlayer.duration && mainAudioPlayer.duration > 0 && !isNaN(mainAudioPlayer.duration);
+        var hasAudio = hasSrc && hasDuration;
+
+        // Show dictation card if we have text (required for dictation - need correct answers)
+        if (text && dictationCard) {
+            dictationCard.classList.add('show');
+        } else if (dictationCard) {
+            dictationCard.classList.remove('show');
+        }
+    }
+
+    // Listen for text changes to update dictation visibility
+    if (textEditor) {
+        textEditor.addEventListener('input', updateDictationVisibility);
+    }
+    if (mainAudioPlayer) {
+        mainAudioPlayer.addEventListener('loadedmetadata', updateDictationVisibility);
+        mainAudioPlayer.addEventListener('loadeddata', updateDictationVisibility);
+    }
+
+    // Initialize dictation session
+    function initDictation() {
+        var text = '';
+        if (currentInputMode === 'editor') {
+            text = textEditor.value.trim();
+        } else {
+            text = textPreview.value.trim();
+        }
+
+        if (!text) {
+            alert('Please enter some text first. Dictation requires text to check your answers against.');
+            return;
+        }
+
+        // Check voice selection
+        var voice = voiceSelect.value;
+        if (!voice) {
+            alert('Please select a voice first.');
+            return;
+        }
+
+        // Split into phrases
+        dictationState.phrases = splitIntoPhrases(text);
+        if (dictationState.phrases.length === 0) {
+            alert('No phrases found in the text.');
+            return;
+        }
+
+        // Reset state
+        dictationState.currentIndex = 0;
+        dictationState.replaysLeft = dictationState.maxReplays;
+        dictationState.scores = [];
+        dictationState.totalCorrect = 0;
+        dictationState.isActive = true;
+
+        // Check if we have existing audio
+        var hasSrc = mainAudioPlayer.src && mainAudioPlayer.src.length > 0 && !mainAudioPlayer.src.endsWith('/');
+        var hasDuration = mainAudioPlayer.duration && mainAudioPlayer.duration > 0 && !isNaN(mainAudioPlayer.duration);
+
+        if (hasSrc && hasDuration) {
+            // Use existing audio with silence detection
+            dictationState.useExistingAudio = true;
+            dictationState.fullAudioUrl = mainAudioPlayer.src;
+            dictationAudio.src = mainAudioPlayer.src;
+
+            // Show loading state
+            startDictationBtn.disabled = true;
+            startDictationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+
+            // Detect phrase boundaries
+            detectSilenceGaps(mainAudioPlayer.src).then(function(silenceResult) {
+                startDictationBtn.disabled = false;
+                startDictationBtn.innerHTML = '<i class="fas fa-play"></i> Start Dictation';
+
+                if (silenceResult && silenceResult.gaps.length > 0) {
+                    dictationState.phraseTimings = buildTimingsFromSilence(
+                        silenceResult,
+                        dictationState.phrases.length
+                    );
+                } else {
+                    // Fallback to estimation
+                    var speakingRate = parseFloat(speakingRateInput.value) || 1.0;
+                    dictationState.phraseTimings = estimatePhraseTimings(
+                        dictationState.phrases,
+                        speakingRate,
+                        mainAudioPlayer.duration
+                    );
+                }
+
+                showDictationUI();
+            }).catch(function(error) {
+                console.error('Silence detection failed:', error);
+                startDictationBtn.disabled = false;
+                startDictationBtn.innerHTML = '<i class="fas fa-play"></i> Start Dictation';
+
+                // Fallback
+                var speakingRate = parseFloat(speakingRateInput.value) || 1.0;
+                dictationState.phraseTimings = estimatePhraseTimings(
+                    dictationState.phrases,
+                    speakingRate,
+                    mainAudioPlayer.duration
+                );
+                showDictationUI();
+            });
+        } else {
+            // Will generate audio per phrase
+            dictationState.useExistingAudio = false;
+            dictationState.phraseTimings = [];
+            showDictationUI();
+        }
+    }
+
+    // Show dictation UI
+    function showDictationUI() {
+        dictationLaunch.style.display = 'none';
+        dictationPlayer.classList.add('active');
+        dictationResult.style.display = 'none';
+        dictationComplete.style.display = 'none';
+
+        // Update progress display
+        dictationTotalNum.textContent = dictationState.phrases.length;
+        updateDictationProgress();
+
+        // Reset input
+        dictationInput.value = '';
+        dictationInput.disabled = false;
+        dictationInput.focus();
+
+        // Reset replay count
+        dictationState.replaysLeft = dictationState.maxReplays;
+        updateReplayCount();
+
+        console.log('Dictation initialized with ' + dictationState.phrases.length + ' phrases');
+    }
+
+    // Update progress display
+    function updateDictationProgress() {
+        var current = dictationState.currentIndex + 1;
+        var total = dictationState.phrases.length;
+        var progress = (current / total) * 100;
+
+        dictationCurrentNum.textContent = current;
+        dictationProgressFill.style.width = progress + '%';
+
+        // Calculate overall score
+        if (dictationState.scores.length > 0) {
+            var avgScore = dictationState.scores.reduce(function(a, b) { return a + b; }, 0) / dictationState.scores.length;
+            dictationScoreSpan.textContent = Math.round(avgScore);
+        } else {
+            dictationScoreSpan.textContent = '0';
+        }
+    }
+
+    // Update replay count display
+    function updateReplayCount() {
+        replayCountSpan.textContent = dictationState.replaysLeft + ' replay' + (dictationState.replaysLeft !== 1 ? 's' : '') + ' left';
+
+        replayCountSpan.classList.remove('warning', 'danger');
+        if (dictationState.replaysLeft === 1) {
+            replayCountSpan.classList.add('warning');
+        } else if (dictationState.replaysLeft === 0) {
+            replayCountSpan.classList.add('danger');
+        }
+    }
+
+    // Play current phrase audio
+    async function playDictationPhrase() {
+        if (dictationState.replaysLeft <= 0) {
+            return;
+        }
+
+        dictationState.replaysLeft--;
+        updateReplayCount();
+
+        var phrase = dictationState.phrases[dictationState.currentIndex];
+        var speed = parseFloat(dictationSpeedSelect.value) || 1.0;
+
+        // Disable play button during playback
+        dictationPlayBtn.disabled = true;
+        dictationPlayBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Playing...';
+
+        if (dictationState.useExistingAudio && dictationState.phraseTimings.length > 0) {
+            // Use existing audio with timing
+            var timing = dictationState.phraseTimings[dictationState.currentIndex];
+            if (timing) {
+                dictationAudio.currentTime = timing.start;
+                dictationAudio.playbackRate = speed;
+
+                // Set up handler to stop at phrase end
+                var onTimeUpdate = function() {
+                    if (dictationAudio.currentTime >= timing.end) {
+                        dictationAudio.removeEventListener('timeupdate', onTimeUpdate);
+                        dictationAudio.pause();
+                        dictationPlayBtn.disabled = false;
+                        dictationPlayBtn.innerHTML = '<i class="fas fa-volume-up"></i> Play';
+                    }
+                };
+                dictationAudio.addEventListener('timeupdate', onTimeUpdate);
+                dictationAudio.play();
+                return;
+            }
+        }
+
+        // Generate audio for this phrase via API
+        try {
+            var response = await fetch('/test-voice', {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({
+                    language: languageSelect.value,
+                    voice: voiceSelect.value,
+                    speakingRate: speed,
+                    pitch: parseFloat(pitchInput.value) || 0,
+                    customText: phrase,
+                    useSsml: false
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate audio');
+            }
+
+            var result = await response.json();
+            if (result.success) {
+                // Clean up previous URL
+                if (dictationState.currentPhraseAudioUrl) {
+                    URL.revokeObjectURL(dictationState.currentPhraseAudioUrl);
+                }
+
+                var audioBlob = base64ToBlob(result.audioContent, 'audio/mp3');
+                dictationState.currentPhraseAudioUrl = URL.createObjectURL(audioBlob);
+                dictationAudio.src = dictationState.currentPhraseAudioUrl;
+                dictationAudio.play();
+            }
+        } catch (error) {
+            console.error('Error generating dictation audio:', error);
+            alert('Error playing audio: ' + error.message);
+        }
+
+        dictationPlayBtn.disabled = false;
+        dictationPlayBtn.innerHTML = '<i class="fas fa-volume-up"></i> Play';
+    }
+
+    // Audio ended handler
+    if (dictationAudio) {
+        dictationAudio.addEventListener('ended', function() {
+            dictationPlayBtn.disabled = false;
+            dictationPlayBtn.innerHTML = '<i class="fas fa-volume-up"></i> Play';
+        });
+    }
+
+    // Check user's answer
+    function checkDictationAnswer() {
+        var userAnswer = dictationInput.value.trim();
+        var correctAnswer = dictationState.phrases[dictationState.currentIndex];
+
+        // Calculate score using word-level comparison
+        var result = compareAnswers(userAnswer, correctAnswer);
+
+        // Store score
+        dictationState.scores.push(result.score);
+        if (result.score === 100) {
+            dictationState.totalCorrect++;
+        }
+
+        // Update displays
+        updateDictationProgress();
+        showDictationResult(userAnswer, correctAnswer, result);
+    }
+
+    // Compare answers and return diff info
+    function compareAnswers(userAnswer, correctAnswer) {
+        // Normalize both answers
+        var normalizeText = function(text) {
+            return text
+                .toLowerCase()
+                .replace(/[.,!?;:'"()]/g, '') // Remove punctuation
+                .replace(/\s+/g, ' ')          // Normalize whitespace
+                .trim();
+        };
+
+        var userNorm = normalizeText(userAnswer);
+        var correctNorm = normalizeText(correctAnswer);
+
+        // Exact match check (normalized)
+        if (userNorm === correctNorm) {
+            return {
+                score: 100,
+                isExactMatch: true,
+                userWords: userAnswer.split(/\s+/),
+                correctWords: correctAnswer.split(/\s+/),
+                diff: []
+            };
+        }
+
+        // Word-level comparison
+        var userWords = userNorm.split(/\s+/).filter(function(w) { return w.length > 0; });
+        var correctWords = correctNorm.split(/\s+/).filter(function(w) { return w.length > 0; });
+
+        // Simple diff: compare word by word
+        var diff = [];
+        var matchCount = 0;
+        var maxLen = Math.max(userWords.length, correctWords.length);
+
+        for (var i = 0; i < maxLen; i++) {
+            var userWord = userWords[i] || '';
+            var correctWord = correctWords[i] || '';
+
+            if (userWord === correctWord) {
+                diff.push({ type: 'match', user: userWord, correct: correctWord });
+                matchCount++;
+            } else if (userWord && correctWord) {
+                // Check for close match (typo tolerance)
+                if (levenshteinDistance(userWord, correctWord) <= 2) {
+                    diff.push({ type: 'close', user: userWord, correct: correctWord });
+                    matchCount += 0.5; // Partial credit for close matches
+                } else {
+                    diff.push({ type: 'wrong', user: userWord, correct: correctWord });
+                }
+            } else if (userWord && !correctWord) {
+                diff.push({ type: 'extra', user: userWord, correct: '' });
+            } else if (!userWord && correctWord) {
+                diff.push({ type: 'missing', user: '', correct: correctWord });
+            }
+        }
+
+        var score = correctWords.length > 0 ? Math.round((matchCount / correctWords.length) * 100) : 0;
+
+        return {
+            score: Math.min(score, 100),
+            isExactMatch: false,
+            userWords: userAnswer.split(/\s+/),
+            correctWords: correctAnswer.split(/\s+/),
+            diff: diff
+        };
+    }
+
+    // Levenshtein distance for typo detection
+    function levenshteinDistance(a, b) {
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+
+        var matrix = [];
+        for (var i = 0; i <= b.length; i++) {
+            matrix[i] = [i];
+        }
+        for (var j = 0; j <= a.length; j++) {
+            matrix[0][j] = j;
+        }
+
+        for (i = 1; i <= b.length; i++) {
+            for (j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1, // substitution
+                        matrix[i][j - 1] + 1,     // insertion
+                        matrix[i - 1][j] + 1      // deletion
+                    );
+                }
+            }
+        }
+
+        return matrix[b.length][a.length];
+    }
+
+    // Show result after checking
+    function showDictationResult(userAnswer, correctAnswer, result) {
+        // Hide input area controls
+        dictationInput.disabled = true;
+        dictationCheckBtn.style.display = 'none';
+        dictationSkipBtn.style.display = 'none';
+
+        // Show result
+        dictationResult.style.display = 'block';
+
+        // Set header based on score
+        var header = dictationResult.querySelector('.result-header');
+        header.classList.remove('correct', 'partial', 'incorrect');
+
+        if (result.score === 100) {
+            resultIcon.innerHTML = '<i class="fas fa-check-circle"></i>';
+            resultLabel.textContent = 'Perfect!';
+            header.classList.add('correct');
+        } else if (result.score >= 70) {
+            resultIcon.innerHTML = '<i class="fas fa-minus-circle"></i>';
+            resultLabel.textContent = 'Almost there! (' + result.score + '%)';
+            header.classList.add('partial');
+        } else {
+            resultIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
+            resultLabel.textContent = 'Keep practicing (' + result.score + '%)';
+            header.classList.add('incorrect');
+        }
+
+        // Display user's answer with diff highlighting
+        var userHtml = '';
+        result.diff.forEach(function(d) {
+            if (d.type === 'match') {
+                userHtml += '<span class="diff-word match">' + escapeHtml(d.user) + '</span> ';
+            } else if (d.type === 'close') {
+                userHtml += '<span class="diff-word match" title="Close match">' + escapeHtml(d.user) + '</span> ';
+            } else if (d.type === 'wrong') {
+                userHtml += '<span class="diff-word wrong">' + escapeHtml(d.user) + '</span> ';
+            } else if (d.type === 'extra') {
+                userHtml += '<span class="diff-word extra">' + escapeHtml(d.user) + '</span> ';
+            }
+        });
+        userAnswerDisplay.innerHTML = userHtml || '<em>(empty)</em>';
+
+        // Display correct answer
+        correctAnswerDisplay.textContent = correctAnswer;
+
+        // Show what was missing
+        var missingWords = result.diff.filter(function(d) { return d.type === 'missing'; });
+        var wrongWords = result.diff.filter(function(d) { return d.type === 'wrong'; });
+
+        var diffText = '';
+        if (missingWords.length > 0) {
+            diffText += 'Missing: ' + missingWords.map(function(d) { return '"' + d.correct + '"'; }).join(', ') + '. ';
+        }
+        if (wrongWords.length > 0) {
+            diffText += 'Incorrect: ' + wrongWords.map(function(d) { return '"' + d.user + '" → "' + d.correct + '"'; }).join(', ');
+        }
+        resultDiff.textContent = diffText;
+
+        // Scroll result into view
+        dictationResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Move to next phrase
+    function nextDictationPhrase() {
+        dictationState.currentIndex++;
+
+        if (dictationState.currentIndex >= dictationState.phrases.length) {
+            // Session complete
+            showDictationComplete();
+            return;
+        }
+
+        // Reset for next phrase
+        dictationResult.style.display = 'none';
+        dictationInput.value = '';
+        dictationInput.disabled = false;
+        dictationCheckBtn.style.display = 'inline-flex';
+        dictationSkipBtn.style.display = 'inline-flex';
+        dictationState.replaysLeft = dictationState.maxReplays;
+
+        updateDictationProgress();
+        updateReplayCount();
+        dictationInput.focus();
+    }
+
+    // Skip current phrase (counts as 0%)
+    function skipDictationPhrase() {
+        dictationState.scores.push(0);
+        updateDictationProgress();
+        nextDictationPhrase();
+    }
+
+    // Show completion screen
+    function showDictationComplete() {
+        dictationResult.style.display = 'none';
+        dictationComplete.style.display = 'block';
+        dictationInput.style.display = 'none';
+        document.querySelector('.dictation-audio-controls').style.display = 'none';
+        document.querySelector('.dictation-actions').style.display = 'none';
+        document.querySelector('.dictation-stop').style.display = 'none';
+
+        // Calculate final stats
+        var avgScore = dictationState.scores.length > 0
+            ? dictationState.scores.reduce(function(a, b) { return a + b; }, 0) / dictationState.scores.length
+            : 0;
+
+        finalScoreSpan.textContent = Math.round(avgScore) + '%';
+        phrasesCorrectSpan.textContent = dictationState.totalCorrect + '/' + dictationState.phrases.length;
+    }
+
+    // Restart dictation
+    function restartDictation() {
+        dictationState.currentIndex = 0;
+        dictationState.scores = [];
+        dictationState.totalCorrect = 0;
+        dictationState.replaysLeft = dictationState.maxReplays;
+
+        // Reset UI
+        dictationComplete.style.display = 'none';
+        dictationResult.style.display = 'none';
+        dictationInput.style.display = 'block';
+        dictationInput.value = '';
+        dictationInput.disabled = false;
+        document.querySelector('.dictation-audio-controls').style.display = 'flex';
+        document.querySelector('.dictation-actions').style.display = 'flex';
+        document.querySelector('.dictation-stop').style.display = 'block';
+        dictationCheckBtn.style.display = 'inline-flex';
+        dictationSkipBtn.style.display = 'inline-flex';
+
+        updateDictationProgress();
+        updateReplayCount();
+        dictationInput.focus();
+    }
+
+    // Stop/close dictation
+    function stopDictation() {
+        dictationState.isActive = false;
+
+        // Clean up audio
+        if (dictationState.currentPhraseAudioUrl) {
+            URL.revokeObjectURL(dictationState.currentPhraseAudioUrl);
+            dictationState.currentPhraseAudioUrl = null;
+        }
+
+        // Reset UI
+        dictationPlayer.classList.remove('active');
+        dictationLaunch.style.display = 'flex';
+        dictationResult.style.display = 'none';
+        dictationComplete.style.display = 'none';
+        dictationInput.style.display = 'block';
+        dictationInput.value = '';
+        dictationInput.disabled = false;
+        document.querySelector('.dictation-audio-controls').style.display = 'flex';
+        document.querySelector('.dictation-actions').style.display = 'flex';
+        document.querySelector('.dictation-stop').style.display = 'block';
+        dictationCheckBtn.style.display = 'inline-flex';
+        dictationSkipBtn.style.display = 'inline-flex';
+    }
+
+    // Replay correct answer audio
+    function replayCorrectAudio() {
+        if (dictationState.useExistingAudio && dictationState.phraseTimings.length > 0) {
+            var timing = dictationState.phraseTimings[dictationState.currentIndex];
+            if (timing) {
+                dictationAudio.currentTime = timing.start;
+                var onTimeUpdate = function() {
+                    if (dictationAudio.currentTime >= timing.end) {
+                        dictationAudio.removeEventListener('timeupdate', onTimeUpdate);
+                        dictationAudio.pause();
+                    }
+                };
+                dictationAudio.addEventListener('timeupdate', onTimeUpdate);
+                dictationAudio.play();
+            }
+        } else if (dictationState.currentPhraseAudioUrl) {
+            dictationAudio.src = dictationState.currentPhraseAudioUrl;
+            dictationAudio.play();
+        }
+    }
+
+    // Event listeners for dictation
+    if (startDictationBtn) {
+        startDictationBtn.addEventListener('click', initDictation);
+    }
+    if (dictationPlayBtn) {
+        dictationPlayBtn.addEventListener('click', playDictationPhrase);
+    }
+    if (dictationCheckBtn) {
+        dictationCheckBtn.addEventListener('click', checkDictationAnswer);
+    }
+    if (dictationSkipBtn) {
+        dictationSkipBtn.addEventListener('click', skipDictationPhrase);
+    }
+    if (dictationNextBtn) {
+        dictationNextBtn.addEventListener('click', nextDictationPhrase);
+    }
+    if (dictationStopBtn) {
+        dictationStopBtn.addEventListener('click', stopDictation);
+    }
+    if (dictationRestartBtn) {
+        dictationRestartBtn.addEventListener('click', restartDictation);
+    }
+    if (dictationCloseBtn) {
+        dictationCloseBtn.addEventListener('click', stopDictation);
+    }
+    if (replayCorrectBtn) {
+        replayCorrectBtn.addEventListener('click', replayCorrectAudio);
+    }
+
+    // Allow Enter key to check answer
+    if (dictationInput) {
+        dictationInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!dictationInput.disabled && dictationCheckBtn.style.display !== 'none') {
+                    checkDictationAnswer();
+                }
+            }
+        });
+    }
+
     // **11. Initialize by Loading Voices and Fetching Usage Stats**
     loadVoices();
     fetchUsageStats();
     loadGermanLessons();
+    updateDictationVisibility();
 
     // **Helper Function to Convert Base64 to Blob**
     function base64ToBlob(base64, mime) {

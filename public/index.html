@@ -1198,6 +1198,324 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
         }
+
+        /* ============================================
+           DICTATION PRACTICE MODE
+           ============================================ */
+        .dictation-card {
+            display: none;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-color: #3b82f6;
+        }
+
+        .dictation-card.show {
+            display: block;
+        }
+
+        .dictation-card .card-header {
+            color: #1e40af;
+        }
+
+        .dictation-card .card-header i {
+            color: #3b82f6;
+        }
+
+        .dictation-launch {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+        }
+
+        .dictation-launch-info {
+            flex: 1;
+        }
+
+        .dictation-launch-info h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: var(--space-xs);
+        }
+
+        .dictation-launch-info p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .btn-dictation {
+            background: #3b82f6;
+            color: white;
+            padding: var(--space-sm) var(--space-md);
+            white-space: nowrap;
+        }
+
+        .btn-dictation:hover {
+            background: #2563eb;
+        }
+
+        /* Dictation Player */
+        .dictation-player {
+            display: none;
+        }
+
+        .dictation-player.active {
+            display: block;
+        }
+
+        /* Progress Bar */
+        .dictation-progress-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+            margin-bottom: var(--space-sm);
+        }
+
+        .dictation-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            border-radius: var(--radius-full);
+            transition: width var(--transition-normal);
+        }
+
+        .dictation-progress-text {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-md);
+        }
+
+        /* Audio Controls */
+        .dictation-audio-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            justify-content: center;
+            margin-bottom: var(--space-md);
+            padding: var(--space-md);
+            background: white;
+            border-radius: var(--radius-md);
+        }
+
+        .replay-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .replay-count.warning {
+            color: var(--warning);
+        }
+
+        .replay-count.danger {
+            color: var(--error);
+        }
+
+        .dictation-speed-control {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .dictation-speed-control label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .dictation-speed-control select {
+            padding: var(--space-xs) var(--space-sm);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+        }
+
+        /* Input Area */
+        .dictation-input-area {
+            margin-bottom: var(--space-md);
+        }
+
+        .dictation-input-area textarea {
+            width: 100%;
+            padding: var(--space-md);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none;
+            transition: border-color var(--transition-fast);
+        }
+
+        .dictation-input-area textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        /* Action Buttons */
+        .dictation-actions {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-md);
+        }
+
+        /* Result Display */
+        .dictation-result {
+            background: white;
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin-bottom: var(--space-md);
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .result-header.correct {
+            color: var(--success);
+        }
+
+        .result-header.partial {
+            color: var(--warning);
+        }
+
+        .result-header.incorrect {
+            color: var(--error);
+        }
+
+        .result-icon {
+            font-size: 1.25rem;
+        }
+
+        .result-comparison {
+            margin-bottom: var(--space-md);
+        }
+
+        .result-row {
+            margin-bottom: var(--space-sm);
+        }
+
+        .result-row-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: var(--space-xs);
+        }
+
+        .result-text {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .result-text.correct {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+        }
+
+        /* Diff highlighting */
+        .diff-word {
+            padding: 1px 2px;
+            border-radius: 2px;
+        }
+
+        .diff-word.match {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .diff-word.wrong {
+            background: #fee2e2;
+            color: #991b1b;
+            text-decoration: line-through;
+        }
+
+        .diff-word.missing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .diff-word.extra {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .result-diff {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-md);
+        }
+
+        .result-actions {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-md);
+        }
+
+        /* Session Complete */
+        .dictation-complete {
+            text-align: center;
+            padding: var(--space-xl);
+        }
+
+        .complete-icon {
+            font-size: 3rem;
+            color: #f59e0b;
+            margin-bottom: var(--space-md);
+        }
+
+        .dictation-complete h3 {
+            margin-bottom: var(--space-lg);
+            color: var(--text-primary);
+        }
+
+        .complete-stats {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-xl);
+            margin-bottom: var(--space-lg);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .complete-actions {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-md);
+        }
+
+        /* Stop Button */
+        .dictation-stop {
+            text-align: center;
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border);
+            margin-top: var(--space-md);
+        }
     </style>
 </head>
 <body>
@@ -1564,6 +1882,133 @@ Select text and use the toolbar buttons above!"
                     <div class="shadowing-progress" id="shadowingProgress">
                         Phrase <span id="currentPhraseNum">0</span> of <span id="totalPhrases">0</span>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 7: Dictation Practice -->
+        <div class="card dictation-card" id="dictationCard">
+            <div class="card-header">
+                <i class="fas fa-keyboard"></i>
+                <span>Dictation Practice</span>
+            </div>
+
+            <!-- Launch Section -->
+            <div class="dictation-launch" id="dictationLaunch">
+                <div class="dictation-launch-info">
+                    <h4>Test your listening comprehension</h4>
+                    <p>Listen to each phrase and type what you hear. Great for training your ear and spelling.</p>
+                </div>
+                <button type="button" class="btn btn-dictation" id="startDictationBtn">
+                    <i class="fas fa-play"></i> Start Dictation
+                </button>
+            </div>
+
+            <!-- Active Dictation Section -->
+            <div class="dictation-player" id="dictationPlayer">
+                <!-- Progress Bar -->
+                <div class="dictation-progress-bar">
+                    <div class="dictation-progress-fill" id="dictationProgressFill" style="width: 0%"></div>
+                </div>
+                <div class="dictation-progress-text">
+                    Phrase <span id="dictationCurrentNum">1</span> of <span id="dictationTotalNum">0</span>
+                    &nbsp;|&nbsp; Score: <span id="dictationScore">0</span>%
+                </div>
+
+                <!-- Audio Controls -->
+                <div class="dictation-audio-controls">
+                    <button type="button" class="btn btn-primary" id="dictationPlayBtn" title="Play phrase">
+                        <i class="fas fa-volume-up"></i> Play
+                    </button>
+                    <span class="replay-count" id="replayCount">3 replays left</span>
+                    <div class="dictation-speed-control">
+                        <label for="dictationSpeed">Speed:</label>
+                        <select id="dictationSpeed">
+                            <option value="0.7">0.7x</option>
+                            <option value="0.85">0.85x</option>
+                            <option value="1.0" selected>1.0x</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Hidden audio element -->
+                <audio id="dictationAudio" style="display: none;"></audio>
+
+                <!-- Input Area -->
+                <div class="dictation-input-area">
+                    <textarea
+                        id="dictationInput"
+                        placeholder="Type what you hear..."
+                        rows="2"
+                    ></textarea>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="dictation-actions">
+                    <button type="button" class="btn btn-secondary" id="dictationSkipBtn">
+                        <i class="fas fa-forward"></i> Skip
+                    </button>
+                    <button type="button" class="btn btn-primary" id="dictationCheckBtn">
+                        <i class="fas fa-check"></i> Check Answer
+                    </button>
+                </div>
+
+                <!-- Result Display (hidden until checked) -->
+                <div class="dictation-result" id="dictationResult" style="display: none;">
+                    <div class="result-header">
+                        <span class="result-icon" id="resultIcon"></span>
+                        <span class="result-label" id="resultLabel"></span>
+                    </div>
+                    <div class="result-comparison">
+                        <div class="result-row">
+                            <span class="result-row-label">You typed:</span>
+                            <div class="result-text" id="userAnswerDisplay"></div>
+                        </div>
+                        <div class="result-row">
+                            <span class="result-row-label">Correct:</span>
+                            <div class="result-text correct" id="correctAnswerDisplay"></div>
+                        </div>
+                    </div>
+                    <div class="result-diff" id="resultDiff"></div>
+                    <div class="result-actions">
+                        <button type="button" class="btn btn-secondary" id="replayCorrectBtn">
+                            <i class="fas fa-volume-up"></i> Replay
+                        </button>
+                        <button type="button" class="btn btn-primary" id="dictationNextBtn">
+                            <i class="fas fa-arrow-right"></i> Next Phrase
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Session Complete -->
+                <div class="dictation-complete" id="dictationComplete" style="display: none;">
+                    <div class="complete-icon"><i class="fas fa-trophy"></i></div>
+                    <h3>Session Complete!</h3>
+                    <div class="complete-stats">
+                        <div class="stat">
+                            <span class="stat-value" id="finalScore">0%</span>
+                            <span class="stat-label">Accuracy</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value" id="phrasesCorrect">0/0</span>
+                            <span class="stat-label">Phrases</span>
+                        </div>
+                    </div>
+                    <div class="complete-actions">
+                        <button type="button" class="btn btn-secondary" id="dictationRestartBtn">
+                            <i class="fas fa-redo"></i> Try Again
+                        </button>
+                        <button type="button" class="btn btn-primary" id="dictationCloseBtn">
+                            <i class="fas fa-times"></i> Close
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stop Button -->
+                <div class="dictation-stop">
+                    <button type="button" class="btn btn-secondary btn-sm" id="dictationStopBtn">
+                        <i class="fas fa-stop"></i> End Session
+                    </button>
                 </div>
             </div>
         </div>
