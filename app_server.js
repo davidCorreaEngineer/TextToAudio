@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
 const {
     getVoiceCategory,
     countCharacters,
@@ -413,10 +414,19 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
         await updateQuota(voiceCategory, count);
         console.log("Quota updated.");
 
-        // Generate unique output filename based on the original file name
+        // Generate output filename based on input source
+        let outputFileName;
         const sanitizedFileName = path.parse(originalFileName).name.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
-        const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        const outputFileName = `${sanitizedFileName}_${uniqueId}_audio.mp3`;
+
+        // If originalFileName looks like a real file (not default pattern), use it directly
+        if (sanitizedFileName && !sanitizedFileName.startsWith('audio_')) {
+            outputFileName = `${sanitizedFileName}.mp3`;
+        } else {
+            // For text editor input, generate name from first words or timestamp
+            const uniqueId = `text_${Date.now()}`;
+            outputFileName = `${uniqueId}.mp3`;
+        }
+
         const outputFile = path.join(__dirname, 'public', outputFileName);
 
         await fs.writeFile(outputFile, audioContent, 'binary');

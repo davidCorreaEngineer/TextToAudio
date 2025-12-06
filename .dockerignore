@@ -1,0 +1,33 @@
+# Dependencies (will be installed in container)
+node_modules
+package-lock.json
+
+# Development files
+npm-debug.log
+.git
+.gitignore
+
+# Test files
+tests
+coverage
+*.test.js
+jest.config.js
+
+# Documentation
+README.md
+CLAUDE.md
+code_style.md
+testing_patterns.md
+
+# Environment files (pass via docker run -e)
+.env
+
+# Uploads directory contents (mount as volume)
+uploads/*
+!uploads/.gitkeep
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo

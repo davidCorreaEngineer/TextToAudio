@@ -745,10 +745,12 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         const pitch = pitchInput.value;
 
         if (!voice) {
-            alert('Please select a voice first.');
+            showToast('warning', 'No Voice Selected', 'Please select a voice first.');
             console.log("No voice selected.");
             return;
         }
+
+        setButtonLoading(testVoiceButton, true);
 
         try {
             const response = await fetch('/test-voice', {
@@ -760,6 +762,8 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             if (response.status === 401 || response.status === 403) {
                 localStorage.removeItem('tts_api_key');
                 resultDiv.innerHTML = '<p class="text-danger">Invalid API key. Please reload and enter a valid key.</p>';
+                showToast('error', 'Authentication Failed', 'Invalid API key.');
+                setButtonLoading(testVoiceButton, false);
                 return;
             }
             if (!response.ok) {
@@ -768,6 +772,7 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
 
             const result = await response.json();
             if (result.success) {
+                showToast('info', 'Voice Preview', 'Playing voice sample...');
                 // Revoke previous audio URL to prevent memory leak
                 if (currentAudioUrl) {
                     URL.revokeObjectURL(currentAudioUrl);
@@ -785,7 +790,10 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             }
         } catch (error) {
             console.error('Error testing voice:', error);
+            showToast('error', 'Voice Test Failed', error.message);
             resultDiv.innerHTML = `<p class="text-danger">Error testing voice: ${error.message}</p>`;
+        } finally {
+            setButtonLoading(testVoiceButton, false);
         }
     });
 
@@ -799,18 +807,23 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         if (currentInputMode === 'editor') {
             editedText = textEditor.value;
             if (!editedText.trim()) {
-                alert('Text editor is empty. Please enter some text.');
+                showToast('warning', 'No Text', 'Please enter some text in the editor.');
                 console.log("Text editor is empty.");
                 return;
             }
-            // Set a default file name for editor mode
+            // Generate filename from first words of text for editor mode
             if (originalFileName === 'audio') {
-                originalFileName = 'text-editor-audio';
+                const firstWords = editedText.trim().substring(0, 30)
+                    .replace(/<[^>]*>/g, '') // Remove SSML tags
+                    .replace(/[^\w\s]/g, '') // Remove punctuation
+                    .replace(/\s+/g, '_')    // Replace spaces with underscores
+                    .toLowerCase();
+                originalFileName = firstWords || 'text_editor';
             }
         } else {
             editedText = textPreview.value;
             if (!editedText.trim()) {
-                alert('Text preview is empty. Please upload and review your text file.');
+                showToast('warning', 'No File', 'Please upload and review your text file.');
                 console.log("Text preview is empty.");
                 return;
             }
@@ -856,11 +869,14 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         formData.append('originalFileName', originalFileName);
         formData.append('useSsml', useSsml);
 
-        // Show Progress Bar
+        // Show Progress Bar and loading state
         progressContainer.style.display = 'block';
         progressBar.style.width = '0%';
         progressBar.setAttribute('aria-valuenow', 0);
         console.log("Progress bar displayed.");
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        setButtonLoading(submitBtn, true);
 
         try {
             const xhr = new XMLHttpRequest();
@@ -880,10 +896,13 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             };
 
             xhr.onload = function() {
+                setButtonLoading(submitBtn, false);
+
                 if (xhr.status === 401 || xhr.status === 403) {
                     localStorage.removeItem('tts_api_key');
                     resultDiv.innerHTML = '<p class="error-message">Invalid API key. Please reload and enter a valid key.</p>';
                     progressContainer.style.display = 'none';
+                    showToast('error', 'Authentication Failed', 'Invalid API key. Please reload the page.');
                     return;
                 }
                 if (xhr.status === 200) {
@@ -891,6 +910,9 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
                     if (result.success) {
                         resultDiv.innerHTML = `<a href="${result.file}" download="${result.fileName}" class="download-btn"><i class="fas fa-download"></i> Download: ${result.fileName}</a>`;
                         console.log("Audio generated:", result.fileName);
+
+                        // Show success toast
+                        showToast('success', 'Audio Generated', `${result.fileName} is ready to download.`);
 
                         // Show output card and load audio
                         const outputCard = document.getElementById('outputCard');
@@ -912,11 +934,14 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
                     } else {
                         resultDiv.innerHTML = `<p class="error-message">Error: ${result.error}</p>`;
                         console.log("Error generating audio:", result.error);
+                        showToast('error', 'Generation Failed', result.error);
                     }
                 } else {
                     const result = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-                    resultDiv.innerHTML = `<p class="error-message">Error: ${result.error || 'Error generating audio. Please try again.'}</p>`;
+                    const errorMsg = result.error || 'Error generating audio. Please try again.';
+                    resultDiv.innerHTML = `<p class="error-message">Error: ${errorMsg}</p>`;
                     console.log("Error generating audio. Status:", xhr.status);
+                    showToast('error', 'Request Failed', errorMsg);
                     // Show output card for error display
                     const outputCard = document.getElementById('outputCard');
                     if (outputCard) {
@@ -932,8 +957,10 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             };
 
             xhr.onerror = function() {
+                setButtonLoading(submitBtn, false);
                 resultDiv.innerHTML = '<p class="text-danger">Error generating audio. Please try again.</p>';
                 progressContainer.style.display = 'none';
+                showToast('error', 'Network Error', 'Failed to connect to server. Please check your connection.');
                 console.log("XHR error.");
             };
 
@@ -3262,6 +3289,120 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             html.setAttribute('data-theme', e.matches ? 'dark' : 'light');
         }
     });
+
+    // ==========================================================================
+    // TOAST NOTIFICATION SYSTEM
+    // ==========================================================================
+    const toastContainer = document.getElementById('toastContainer');
+
+    /**
+     * Show toast notification
+     * @param {string} type - 'success', 'error', 'info', or 'warning'
+     * @param {string} title - Toast title
+     * @param {string} message - Toast message (optional)
+     * @param {number} duration - Auto-dismiss duration in ms (0 = no auto-dismiss)
+     */
+    window.showToast = function(type, title, message = '', duration = 4000) {
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle',
+            warning: 'fa-exclamation-triangle'
+        };
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <i class="fas ${icons[type]}"></i>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">${title}</div>
+                ${message ? `<div class="toast-message">${message}</div>` : ''}
+            </div>
+            <button class="toast-close" aria-label="Close">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        const closeBtn = toast.querySelector('.toast-close');
+        closeBtn.addEventListener('click', () => removeToast(toast));
+
+        toastContainer.appendChild(toast);
+
+        if (duration > 0) {
+            setTimeout(() => removeToast(toast), duration);
+        }
+
+        return toast;
+    };
+
+    function removeToast(toast) {
+        toast.classList.add('hiding');
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.parentElement.removeChild(toast);
+            }
+        }, 300);
+    }
+
+    // ==========================================================================
+    // LOADING SKELETON UTILITIES
+    // ==========================================================================
+
+    /**
+     * Create skeleton loading card for audio library
+     */
+    function createSkeletonCard() {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'skeleton-card';
+        skeleton.innerHTML = `
+            <div class="skeleton-header">
+                <div class="skeleton skeleton-icon"></div>
+                <div class="skeleton skeleton-title"></div>
+            </div>
+            <div class="skeleton skeleton-waveform"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+            <div class="skeleton-controls">
+                <div class="skeleton skeleton-play-btn"></div>
+                <div class="skeleton skeleton-duration"></div>
+                <div class="skeleton-actions">
+                    <div class="skeleton skeleton-action-btn"></div>
+                    <div class="skeleton skeleton-action-btn"></div>
+                    <div class="skeleton skeleton-action-btn"></div>
+                </div>
+            </div>
+        `;
+        return skeleton;
+    }
+
+    /**
+     * Show skeleton loading in audio library
+     * @param {number} count - Number of skeleton cards to show
+     */
+    window.showLibraryLoading = function(count = 3) {
+        const library = document.getElementById('audioLibrary');
+        library.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            library.appendChild(createSkeletonCard());
+        }
+    };
+
+    /**
+     * Add loading state to button
+     * @param {HTMLElement} button - Button element
+     */
+    window.setButtonLoading = function(button, loading) {
+        if (loading) {
+            button.classList.add('loading');
+            button.disabled = true;
+        } else {
+            button.classList.remove('loading');
+            button.disabled = false;
+        }
+    };
 
     // Initial render
     renderLibrary();
