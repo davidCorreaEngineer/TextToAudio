@@ -23,7 +23,7 @@
            CSS VARIABLES & DESIGN TOKENS
            ============================================ */
         :root {
-            /* Colors */
+            /* Colors - Light Mode */
             --accent: #0891b2;
             --accent-hover: #0e7490;
             --accent-light: #ecfeff;
@@ -63,6 +63,33 @@
             --transition-normal: 250ms ease;
         }
 
+        /* Dark Mode Colors */
+        [data-theme="dark"] {
+            --accent: #06b6d4;
+            --accent-hover: #22d3ee;
+            --accent-light: #164e63;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --bg-primary: #1e293b;
+            --bg-secondary: #0f172a;
+            --bg-page: #020617;
+            --border: #334155;
+            --border-focus: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Smooth theme transition */
+        body {
+            transition: background-color var(--transition-normal), color var(--transition-normal);
+        }
+
         /* ============================================
            BASE STYLES
            ============================================ */
@@ -84,10 +111,26 @@
            LAYOUT
            ============================================ */
         .app-container {
-            max-width: 720px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: var(--space-lg);
             padding-top: var(--space-md);
+        }
+
+        .dual-panel-layout {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: var(--space-lg);
+            align-items: start;
+        }
+
+        .input-panel {
+            position: sticky;
+            top: var(--space-lg);
+        }
+
+        .library-panel {
+            min-height: 600px;
         }
 
         /* ============================================
@@ -140,6 +183,39 @@
 
         .usage-indicator:hover {
             background: var(--border);
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+        }
+
+        .theme-toggle:hover {
+            background: var(--border);
+            transform: rotate(15deg);
+        }
+
+        .theme-toggle i {
+            transition: transform var(--transition-normal);
+        }
+
+        [data-theme="dark"] .theme-toggle .fa-sun {
+            display: none;
+        }
+
+        [data-theme="light"] .theme-toggle .fa-moon {
+            display: none;
         }
 
         .usage-bar {
@@ -925,8 +1001,311 @@
         }
 
         /* ============================================
+           AUDIO LIBRARY CARDS
+           ============================================ */
+        .library-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }
+
+        .library-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .library-count {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+            padding: var(--space-xs) var(--space-md);
+            border-radius: var(--radius-full);
+        }
+
+        .audio-library-empty {
+            text-align: center;
+            padding: var(--space-2xl);
+            color: var(--text-muted);
+        }
+
+        .audio-library-empty i {
+            font-size: 3rem;
+            margin-bottom: var(--space-md);
+            opacity: 0.3;
+        }
+
+        .audio-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin-bottom: var(--space-md);
+            transition: all var(--transition-fast);
+        }
+
+        .audio-card:hover {
+            box-shadow: var(--shadow-md);
+            border-color: var(--accent);
+        }
+
+        .audio-card-content {
+            margin-bottom: var(--space-sm);
+        }
+
+        .audio-card-text {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            line-height: 1.5;
+            margin-bottom: var(--space-sm);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .audio-card-text.expanded {
+            -webkit-line-clamp: unset;
+        }
+
+        .audio-card-waveform {
+            height: 60px;
+            margin-bottom: var(--space-sm);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: var(--bg-secondary);
+        }
+
+        .audio-card-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding-top: var(--space-sm);
+            border-top: 1px solid var(--border);
+        }
+
+        .audio-card-play {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .audio-card-play:hover {
+            background: var(--accent-hover);
+            transform: scale(1.1);
+        }
+
+        .audio-card-duration {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .audio-card-actions {
+            margin-left: auto;
+            display: flex;
+            gap: var(--space-xs);
+        }
+
+        .audio-card-btn {
+            padding: var(--space-xs);
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all var(--transition-fast);
+            font-size: 0.875rem;
+        }
+
+        .audio-card-btn:hover {
+            background: var(--bg-secondary);
+            color: var(--accent);
+        }
+
+        .audio-card-btn.favorite.active {
+            color: #f59e0b;
+        }
+
+        .audio-card-meta {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: var(--space-xs);
+        }
+
+        /* ============================================
+           FLOATING ACTION BUTTON
+           ============================================ */
+        .fab-container {
+            position: fixed;
+            bottom: var(--space-lg);
+            right: var(--space-lg);
+            z-index: 1000;
+        }
+
+        .fab {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent) 0%, #06b6d4 100%);
+            color: white;
+            border: none;
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all var(--transition-fast);
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.15);
+        }
+
+        .fab.active {
+            transform: rotate(45deg);
+        }
+
+        .fab-menu {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            padding: var(--space-sm);
+            min-width: 280px;
+            display: none;
+        }
+
+        .fab-menu.show {
+            display: block;
+            animation: slideUp 0.2s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fab-menu-input {
+            width: 100%;
+            padding: var(--space-sm);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            margin-bottom: var(--space-sm);
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .fab-menu-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .fab-menu-btn {
+            width: 100%;
+            padding: var(--space-sm);
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 500;
+            transition: background var(--transition-fast);
+        }
+
+        .fab-menu-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        /* ============================================
+           PROGRESS DASHBOARD
+           ============================================ */
+        .progress-dashboard {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1px solid var(--success);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+        }
+
+        .dashboard-stat {
+            text-align: center;
+        }
+
+        .dashboard-stat-value {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--success);
+            margin-bottom: var(--space-xs);
+        }
+
+        .dashboard-stat-label {
+            font-size: 0.75rem;
+            color: #166534;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .dashboard-progress-bar {
+            margin-top: var(--space-sm);
+            height: 8px;
+            background: #bbf7d0;
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+
+        .dashboard-progress-fill {
+            height: 100%;
+            background: var(--success);
+            border-radius: var(--radius-full);
+            transition: width var(--transition-normal);
+        }
+
+        /* ============================================
            RESPONSIVE
            ============================================ */
+        @media (max-width: 1024px) {
+            .dual-panel-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .input-panel {
+                position: static;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
         @media (max-width: 640px) {
             .app-container {
                 padding: var(--space-md);
@@ -961,6 +1340,15 @@
 
             .ssml-toolbar {
                 justify-content: center;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .fab-container {
+                bottom: var(--space-md);
+                right: var(--space-md);
             }
         }
 
@@ -1528,7 +1916,12 @@
                 </div>
                 <span class="app-logo-text">VoiceCraft</span>
             </div>
-            <div class="usage-indicator" id="usageIndicator">
+            <div style="display: flex; align-items: center; gap: var(--space-md);">
+                <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+                    <i class="fas fa-sun"></i>
+                    <i class="fas fa-moon"></i>
+                </button>
+                <div class="usage-indicator" id="usageIndicator">
                 <div class="usage-bar">
                     <div class="usage-bar-fill" id="usageBarFill" style="width: 0%"></div>
                 </div>
@@ -1541,10 +1934,36 @@
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
         </header>
 
-        <form id="ttsForm">
+        <!-- Progress Dashboard -->
+        <div class="progress-dashboard" id="progressDashboard">
+            <div class="dashboard-grid">
+                <div class="dashboard-stat">
+                    <span class="dashboard-stat-value" id="dashboardPhrases">0</span>
+                    <span class="dashboard-stat-label">This Week</span>
+                </div>
+                <div class="dashboard-stat">
+                    <span class="dashboard-stat-value" id="dashboardStreak">0</span>
+                    <span class="dashboard-stat-label">Day Streak</span>
+                </div>
+                <div class="dashboard-stat">
+                    <span class="dashboard-stat-value" id="dashboardTime">0m</span>
+                    <span class="dashboard-stat-label">Listening Time</span>
+                </div>
+            </div>
+            <div class="dashboard-progress-bar">
+                <div class="dashboard-progress-fill" id="dashboardProgressFill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Dual Panel Layout -->
+        <div class="dual-panel-layout">
+            <!-- Left Panel: Input & Controls -->
+            <div class="input-panel">
+                <form id="ttsForm">
             <!-- Card 1: Input -->
             <div class="card">
                 <div class="card-header">
@@ -1755,13 +2174,31 @@ Select text and use the toolbar buttons above!"
                     Generate Audio
                 </button>
             </div>
-        </form>
+                </form>
 
-        <!-- Test Voice Audio (hidden) -->
-        <div id="testSentence"></div>
-        <audio id="audioPlayer" controls></audio>
+                <!-- Test Voice Audio (hidden) -->
+                <div id="testSentence"></div>
+                <audio id="audioPlayer" controls></audio>
+            </div>
 
-        <!-- Card 5: Output -->
+            <!-- Right Panel: Audio Library -->
+            <div class="library-panel">
+                <div class="library-header">
+                    <h2 class="library-title">Audio Library</h2>
+                    <span class="library-count" id="libraryCount">0 items</span>
+                </div>
+
+                <div id="audioLibrary">
+                    <div class="audio-library-empty">
+                        <i class="fas fa-music"></i>
+                        <p>No audio files yet</p>
+                        <small>Generate audio to see it here</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output Card (below dual panel) -->
         <div class="card output-card" id="outputCard">
             <div class="card-header">
                 <i class="fas fa-volume-up"></i>
@@ -2015,9 +2452,23 @@ Select text and use the toolbar buttons above!"
 
         <!-- Hidden text preview for compatibility -->
         <textarea id="textPreview" name="textPreview" readonly hidden></textarea>
+
+        <!-- Floating Action Button -->
+        <div class="fab-container">
+            <div class="fab-menu" id="fabMenu">
+                <textarea class="fab-menu-input" id="fabInput" placeholder="Quick phrase..."></textarea>
+                <button class="fab-menu-btn" id="fabGenerate">
+                    <i class="fas fa-magic"></i> Generate
+                </button>
+            </div>
+            <button class="fab" id="fabButton">
+                <i class="fas fa-plus"></i>
+            </button>
+        </div>
     </div>
 
     <!-- Scripts -->
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="app_client.js"></script>
 </body>

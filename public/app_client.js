@@ -901,6 +901,12 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
                         // Also load the generated audio into the main audio player
                         loadAudioIntoPlayer(result.file, result.fileName);
 
+                        // Add to audio library
+                        if (typeof window.addToLibrary === 'function') {
+                            window.addToLibrary(result.file, processedText, '0:00');
+                            window.incrementPhrases();
+                        }
+
                         // Refresh usage stats
                         fetchUsageStats();
                     } else {
@@ -3021,4 +3027,244 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
         const byteArray = new Uint8Array(byteNumbers);
         return new Blob([byteArray], {type: mime});
     }
+
+    // ==========================================================================
+    // NEW UI COMPONENTS
+    // ==========================================================================
+
+    // Audio Library Management
+    const audioLibrary = document.getElementById('audioLibrary');
+    const libraryCount = document.getElementById('libraryCount');
+    let audioItems = JSON.parse(localStorage.getItem('audioLibrary') || '[]');
+
+    function saveLibrary() {
+        localStorage.setItem('audioLibrary', JSON.stringify(audioItems));
+        updateLibraryCount();
+    }
+
+    function updateLibraryCount() {
+        libraryCount.textContent = `${audioItems.length} item${audioItems.length !== 1 ? 's' : ''}`;
+    }
+
+    function addToLibrary(audioUrl, text, duration) {
+        const item = {
+            id: Date.now(),
+            audioUrl,
+            text: text.substring(0, 200),
+            duration: duration || '0:00',
+            timestamp: new Date().toISOString(),
+            favorite: false
+        };
+        audioItems.unshift(item);
+        saveLibrary();
+        renderLibrary();
+    }
+
+    function removeFromLibrary(id) {
+        audioItems = audioItems.filter(item => item.id !== id);
+        saveLibrary();
+        renderLibrary();
+    }
+
+    function toggleFavorite(id) {
+        const item = audioItems.find(i => i.id === id);
+        if (item) {
+            item.favorite = !item.favorite;
+            saveLibrary();
+            renderLibrary();
+        }
+    }
+
+    function renderLibrary() {
+        if (audioItems.length === 0) {
+            audioLibrary.innerHTML = `
+                <div class="audio-library-empty">
+                    <i class="fas fa-music"></i>
+                    <p>No audio files yet</p>
+                    <small>Generate audio to see it here</small>
+                </div>
+            `;
+            return;
+        }
+
+        audioLibrary.innerHTML = audioItems.map(item => `
+            <div class="audio-card" data-id="${item.id}">
+                <div class="audio-card-content">
+                    <div class="audio-card-text">${item.text}</div>
+                    <div class="audio-card-waveform" id="waveform-${item.id}"></div>
+                </div>
+                <div class="audio-card-controls">
+                    <button class="audio-card-play" onclick="playAudioCard(${item.id})">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <span class="audio-card-duration">${item.duration}</span>
+                    <div class="audio-card-actions">
+                        <button class="audio-card-btn favorite ${item.favorite ? 'active' : ''}"
+                                onclick="toggleFavorite(${item.id})" title="Favorite">
+                            <i class="fas fa-star"></i>
+                        </button>
+                        <button class="audio-card-btn" onclick="downloadAudioCard(${item.id})" title="Download">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="audio-card-btn" onclick="removeFromLibrary(${item.id})" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="audio-card-meta">
+                    ${new Date(item.timestamp).toLocaleString()}
+                </div>
+            </div>
+        `).join('');
+
+        // Initialize waveforms
+        setTimeout(() => {
+            audioItems.forEach(item => {
+                const container = document.getElementById(`waveform-${item.id}`);
+                if (container && typeof WaveSurfer !== 'undefined') {
+                    const ws = WaveSurfer.create({
+                        container: container,
+                        waveColor: '#94a3b8',
+                        progressColor: '#0891b2',
+                        height: 60,
+                        barWidth: 2,
+                        barGap: 1,
+                        barRadius: 2,
+                        interact: false
+                    });
+                    ws.load(item.audioUrl);
+                }
+            });
+        }, 100);
+    }
+
+    // Expose functions to window scope for onclick handlers
+    window.playAudioCard = function(id) {
+        const item = audioItems.find(i => i.id === id);
+        if (item) {
+            const audio = new Audio(item.audioUrl);
+            audio.play();
+        }
+    };
+
+    window.downloadAudioCard = function(id) {
+        const item = audioItems.find(i => i.id === id);
+        if (item) {
+            const a = document.createElement('a');
+            a.href = item.audioUrl;
+            a.download = `audio-${item.id}.mp3`;
+            a.click();
+        }
+    };
+
+    window.toggleFavorite = function(id) {
+        const item = audioItems.find(i => i.id === id);
+        if (item) {
+            item.favorite = !item.favorite;
+            saveLibrary();
+            renderLibrary();
+        }
+    };
+
+    window.removeFromLibrary = function(id) {
+        audioItems = audioItems.filter(item => item.id !== id);
+        saveLibrary();
+        renderLibrary();
+    };
+
+    // Make addToLibrary and incrementPhrases accessible globally
+    window.addToLibrary = addToLibrary;
+    window.incrementPhrases = incrementPhrases;
+
+    // Floating Action Button
+    const fabButton = document.getElementById('fabButton');
+    const fabMenu = document.getElementById('fabMenu');
+    const fabInput = document.getElementById('fabInput');
+    const fabGenerate = document.getElementById('fabGenerate');
+
+    fabButton.addEventListener('click', () => {
+        fabButton.classList.toggle('active');
+        fabMenu.classList.toggle('show');
+        if (fabMenu.classList.contains('show')) {
+            fabInput.focus();
+        }
+    });
+
+    fabGenerate.addEventListener('click', async () => {
+        const text = fabInput.value.trim();
+        if (!text) return;
+
+        fabButton.classList.remove('active');
+        fabMenu.classList.remove('show');
+
+        textEditor.value = text;
+        textEditorModeBtn.click();
+        fabInput.value = '';
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    fabInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            fabGenerate.click();
+        }
+    });
+
+    // Progress Dashboard
+    const dashboardPhrases = document.getElementById('dashboardPhrases');
+    const dashboardStreak = document.getElementById('dashboardStreak');
+    const dashboardTime = document.getElementById('dashboardTime');
+    const dashboardProgressFill = document.getElementById('dashboardProgressFill');
+
+    function updateDashboard() {
+        const stats = JSON.parse(localStorage.getItem('learningStats') || '{"phrases": 0, "streak": 0, "time": 0}');
+
+        dashboardPhrases.textContent = stats.phrases || audioItems.length;
+        dashboardStreak.textContent = stats.streak || 0;
+        dashboardTime.textContent = `${Math.floor((stats.time || 0) / 60)}m`;
+
+        const weeklyGoal = 50;
+        const progress = Math.min(100, (stats.phrases / weeklyGoal) * 100);
+        dashboardProgressFill.style.width = `${progress}%`;
+    }
+
+    function incrementPhrases() {
+        const stats = JSON.parse(localStorage.getItem('learningStats') || '{"phrases": 0, "streak": 0, "time": 0}');
+        stats.phrases = (stats.phrases || 0) + 1;
+        localStorage.setItem('learningStats', JSON.stringify(stats));
+        updateDashboard();
+    }
+
+    // ==========================================================================
+    // DARK MODE TOGGLE
+    // ==========================================================================
+    const themeToggle = document.getElementById('themeToggle');
+    const html = document.documentElement;
+
+    // Check for saved theme preference or default to system preference
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+    html.setAttribute('data-theme', initialTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = html.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+        html.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+    });
+
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('theme')) {
+            html.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+        }
+    });
+
+    // Initial render
+    renderLibrary();
+    updateDashboard();
+    updateLibraryCount();
 });
