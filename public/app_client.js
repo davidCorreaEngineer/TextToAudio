@@ -236,11 +236,45 @@ document.addEventListener('DOMContentLoaded', function() {
         audioFileInfo.style.display = 'block';
         mainAudioPlayer.style.display = 'block';
 
+        // Load the audio
+        mainAudioPlayer.load();
+
         console.log("Audio loaded into player:", fileName);
     }
 
+    // Debug event listeners for audio player
+    mainAudioPlayer.addEventListener('play', () => {
+        console.log("Audio player: play event");
+    });
+
+    mainAudioPlayer.addEventListener('pause', () => {
+        console.log("Audio player: pause event");
+    });
+
+    mainAudioPlayer.addEventListener('ended', () => {
+        console.log("Audio player: ended event");
+    });
+
+    mainAudioPlayer.addEventListener('error', (e) => {
+        console.error("Audio player error:", mainAudioPlayer.error);
+    });
+
+    mainAudioPlayer.addEventListener('loadeddata', () => {
+        console.log("Audio player: loadeddata event, duration:", mainAudioPlayer.duration);
+    });
+
+    mainAudioPlayer.addEventListener('canplay', () => {
+        console.log("Audio player: canplay event");
+    });
+
+    // Prevent audio player clicks from bubbling (in case it's inside or near the drop zone)
+    mainAudioPlayer.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
     // Click to open file dialog
-    audioDropZone.addEventListener('click', () => {
+    audioDropZone.addEventListener('click', (e) => {
+        // Only trigger if clicking directly on the drop zone, not on child elements that handle their own events
         console.log("Audio drop zone clicked. Opening file dialog.");
         audioFileInput.click();
     });
