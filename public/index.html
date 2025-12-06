@@ -127,6 +127,15 @@
                 <input type="checkbox" id="addPauses" name="addPauses">
                 <label for="addPauses">Add pauses between sentences</label>
             </div>
+
+			<!-- **Add Checkbox for Stripping Comments** -->
+			<div class="form-group">
+                <input type="checkbox" id="stripComments" name="stripComments">
+                <label for="stripComments">Strip comments (// and /* */ and == headers)</label>
+                <small class="form-text text-muted" id="strippedCharCount" style="display: none;">
+                    Characters after stripping: <span id="cleanCharCount">0</span>
+                </small>
+            </div>
 			
 			<!-- **Input for Pause Duration (ms)** -->
             <div class="form-group" id="pauseDurationContainer">

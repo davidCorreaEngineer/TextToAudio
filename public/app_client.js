@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	const addPausesCheckbox = document.getElementById('addPauses');
     const pauseDurationContainer = document.getElementById('pauseDurationContainer');
     const pauseDurationInput = document.getElementById('pauseDuration');
+    const stripCommentsCheckbox = document.getElementById('stripComments');
+    const strippedCharCountDiv = document.getElementById('strippedCharCount');
+    const cleanCharCountSpan = document.getElementById('cleanCharCount');
 
     // **1. Initialize Chart Variables**
     let usageChart;
@@ -160,6 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
             reader.onload = function(event) {
                 textPreview.value = event.target.result;
                 console.log("Text preview updated.");
+                updateStrippedCharCount();
             };
             reader.readAsText(file);
         } else {
@@ -268,13 +272,19 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Form submitted.");
 
         // Retrieve edited text from preview
-        const editedText = textPreview.value;
+        let editedText = textPreview.value;
         if (!editedText.trim()) {
             alert('Text preview is empty. Please upload and review your text file.');
             console.log("Text preview is empty.");
             return;
         }
-		
+
+        // **Strip Comments if Enabled**
+        if (stripCommentsCheckbox.checked) {
+            editedText = stripComments(editedText);
+            console.log("Comments stripped. New length:", editedText.length);
+        }
+
 		// **Process Text to Add Pauses if Enabled**
         const addPauses = addPausesCheckbox.checked;
         const pauseDuration = parseInt(pauseDurationInput.value) || 1000; // Default to 1000 ms if invalid
@@ -376,6 +386,50 @@ document.addEventListener('DOMContentLoaded', function() {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&apos;');
+    }
+
+    // **Function to Strip Comments from Text**
+    // Removes:
+    // - Lines starting with // (single-line comments)
+    // - Lines starting with /* or ending with */ (multi-line comment markers)
+    // - Lines starting with == (section headers)
+    // - Multi-line /* ... */ blocks
+    function stripComments(text) {
+        // First, remove multi-line /* ... */ blocks (including content between them)
+        let result = text.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // Then process line by line
+        const lines = result.split('\n');
+        const cleanedLines = lines.filter(line => {
+            const trimmed = line.trim();
+            // Skip empty lines that resulted from comment removal
+            if (trimmed === '') return false;
+            // Skip lines starting with //
+            if (trimmed.startsWith('//')) return false;
+            // Skip lines starting with ==
+            if (trimmed.startsWith('==')) return false;
+            // Skip lines that are just /* or */
+            if (trimmed === '/*' || trimmed === '*/') return false;
+            return true;
+        });
+
+        return cleanedLines.join('\n').trim();
+    }
+
+    // **Update character count when strip comments checkbox changes**
+    stripCommentsCheckbox.addEventListener('change', () => {
+        updateStrippedCharCount();
+    });
+
+    function updateStrippedCharCount() {
+        const text = textPreview.value;
+        if (stripCommentsCheckbox.checked && text) {
+            const cleanedText = stripComments(text);
+            cleanCharCountSpan.textContent = cleanedText.length.toLocaleString();
+            strippedCharCountDiv.style.display = 'block';
+        } else {
+            strippedCharCountDiv.style.display = 'none';
+        }
     }
 
     // **Function to Convert Text to SSML with Pauses**
