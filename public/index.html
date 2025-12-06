@@ -18,7 +18,6 @@
     <link
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
-        integrity="sha512-dY0D9owV5bY+uJYpbE9M/8B1+l0L4PNFzBB3MItNpJqgPp5B5x9PpLN3GJvQ8YvkvX5HqA4ZpQ3a4W6gDk5xCg=="
         crossorigin="anonymous"
         referrerpolicy="no-referrer"
     />
@@ -99,6 +98,42 @@
             line-height: 25px;
             font-size: 0.9rem;
         }
+        /* **11. Audio Player Section Styling** */
+        #audioPlayerSection {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+        #audioDropZone {
+            background-color: #f8f9fa;
+            border: 2px dashed #ced4da;
+            border-radius: 5px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s, border-color 0.3s;
+            margin-bottom: 15px;
+        }
+        #audioDropZone.dragover {
+            background-color: #e9ecef;
+            border-color: #495057;
+        }
+        #audioDropZone i {
+            font-size: 2rem;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        #audioFileName {
+            font-weight: 500;
+            color: #495057;
+        }
+        #mainAudioPlayer {
+            width: 100%;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -126,6 +161,15 @@
 			<div class="form-group">
                 <input type="checkbox" id="addPauses" name="addPauses">
                 <label for="addPauses">Add pauses between sentences</label>
+            </div>
+
+			<!-- **Add Checkbox for Stripping Comments** -->
+			<div class="form-group">
+                <input type="checkbox" id="stripComments" name="stripComments">
+                <label for="stripComments">Strip comments (// and /* */ and == headers)</label>
+                <small class="form-text text-muted" id="strippedCharCount" style="display: none;">
+                    Characters after stripping: <span id="cleanCharCount">0</span>
+                </small>
             </div>
 			
 			<!-- **Input for Pause Duration (ms)** -->
@@ -253,13 +297,37 @@
         <!-- **20. Test Sentence Display** -->
         <div id="testSentence" class="mt-4"></div>
         
-        <!-- **21. Audio Player** -->
+        <!-- **21. Test Audio Player (for voice testing)** -->
         <audio id="audioPlayer" class="mt-3 w-100" controls style="display: none;"></audio>
-        
+
         <!-- **22. Result Display** -->
         <div id="result" class="mt-4"></div>
 
-        <!-- **23. Dashboard Section** -->
+        <!-- **23. Audio Player Section** -->
+        <div id="audioPlayerSection">
+            <h4><i class="fas fa-headphones"></i> Audio Player</h4>
+            <p class="text-muted small">Upload an audio file or generate audio above to play it here.</p>
+
+            <!-- Hidden file input (outside drop zone to prevent event issues) -->
+            <input type="file" id="audioFileInput" accept="audio/*" hidden />
+
+            <!-- Audio Drop Zone -->
+            <div id="audioDropZone">
+                <i class="fas fa-music"></i>
+                <p class="mb-0">Drag and drop an audio file here or click to select</p>
+                <small class="text-muted">Supports MP3, WAV, OGG, M4A</small>
+            </div>
+
+            <!-- Audio File Name Display -->
+            <div id="audioFileInfo" style="display: none;">
+                <p class="mb-2"><i class="fas fa-file-audio"></i> <span id="audioFileName">No file loaded</span></p>
+            </div>
+
+            <!-- Main Audio Player -->
+            <audio id="mainAudioPlayer" controls style="display: none;"></audio>
+        </div>
+
+        <!-- **24. Dashboard Section** -->
         <div id="dashboard" class="mt-5">
             <h2>Usage Dashboard</h2>
             <!-- **23.1. Summary Cards** -->

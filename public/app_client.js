@@ -63,6 +63,16 @@ document.addEventListener('DOMContentLoaded', function() {
 	const addPausesCheckbox = document.getElementById('addPauses');
     const pauseDurationContainer = document.getElementById('pauseDurationContainer');
     const pauseDurationInput = document.getElementById('pauseDuration');
+    const stripCommentsCheckbox = document.getElementById('stripComments');
+    const strippedCharCountDiv = document.getElementById('strippedCharCount');
+    const cleanCharCountSpan = document.getElementById('cleanCharCount');
+
+    // Audio Player Section Elements
+    const audioDropZone = document.getElementById('audioDropZone');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const mainAudioPlayer = document.getElementById('mainAudioPlayer');
+    const audioFileInfo = document.getElementById('audioFileInfo');
+    const audioFileNameSpan = document.getElementById('audioFileName');
 
     // **1. Initialize Chart Variables**
     let usageChart;
@@ -160,6 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
             reader.onload = function(event) {
                 textPreview.value = event.target.result;
                 console.log("Text preview updated.");
+                updateStrippedCharCount();
             };
             reader.readAsText(file);
         } else {
@@ -195,6 +206,136 @@ document.addEventListener('DOMContentLoaded', function() {
             textFileInput.files = e.dataTransfer.files;
             const event = new Event('change');
             textFileInput.dispatchEvent(event);
+        }
+    });
+
+    // **5.5. Audio Player Drag-and-Drop and Upload Functionality**
+
+    // Track current main audio URL for cleanup
+    let currentMainAudioUrl = null;
+
+    // Function to load audio into the main player
+    function loadAudioIntoPlayer(audioSource, fileName) {
+        // Clean up previous audio URL if it was a blob URL
+        if (currentMainAudioUrl && currentMainAudioUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(currentMainAudioUrl);
+        }
+
+        // Set the audio source
+        if (audioSource instanceof Blob) {
+            currentMainAudioUrl = URL.createObjectURL(audioSource);
+            mainAudioPlayer.src = currentMainAudioUrl;
+        } else {
+            // It's a URL string
+            currentMainAudioUrl = audioSource;
+            mainAudioPlayer.src = audioSource;
+        }
+
+        // Update UI
+        audioFileNameSpan.textContent = fileName || 'Audio loaded';
+        audioFileInfo.style.display = 'block';
+        mainAudioPlayer.style.display = 'block';
+
+        console.log("Audio loaded into player:", fileName);
+    }
+
+    // Debug event listeners for audio player
+    mainAudioPlayer.addEventListener('play', () => {
+        console.log("Audio player: play event");
+        console.log("  currentTime:", mainAudioPlayer.currentTime);
+        console.log("  paused:", mainAudioPlayer.paused);
+        console.log("  muted:", mainAudioPlayer.muted);
+        console.log("  volume:", mainAudioPlayer.volume);
+    });
+
+    mainAudioPlayer.addEventListener('pause', () => {
+        console.log("Audio player: pause event");
+        console.log("  currentTime:", mainAudioPlayer.currentTime);
+        console.log("  Stack trace:", new Error().stack);
+    });
+
+    mainAudioPlayer.addEventListener('ended', () => {
+        console.log("Audio player: ended event");
+    });
+
+    mainAudioPlayer.addEventListener('error', (e) => {
+        console.error("Audio player error:", mainAudioPlayer.error);
+    });
+
+    mainAudioPlayer.addEventListener('loadeddata', () => {
+        console.log("Audio player: loadeddata event, duration:", mainAudioPlayer.duration);
+    });
+
+    mainAudioPlayer.addEventListener('canplay', () => {
+        console.log("Audio player: canplay event");
+    });
+
+    // Prevent audio player clicks from bubbling (in case it's inside or near the drop zone)
+    mainAudioPlayer.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // Debounce flag to prevent double-click issues
+    let isFileDialogOpen = false;
+
+    // Click to open file dialog
+    audioDropZone.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Prevent opening multiple dialogs
+        if (isFileDialogOpen) {
+            console.log("File dialog already open, ignoring click.");
+            return;
+        }
+
+        console.log("Audio drop zone clicked. Opening file dialog.");
+        isFileDialogOpen = true;
+        audioFileInput.click();
+
+        // Reset flag after a short delay (dialog close doesn't have a reliable event)
+        setTimeout(() => {
+            isFileDialogOpen = false;
+        }, 1000);
+    });
+
+    // Handle file selection
+    audioFileInput.addEventListener('change', (e) => {
+        e.stopPropagation();
+        isFileDialogOpen = false;
+
+        const file = e.target.files[0];
+        if (file) {
+            console.log("Audio file selected:", file.name);
+            loadAudioIntoPlayer(file, file.name);
+        }
+    });
+
+    // Drag over
+    audioDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        audioDropZone.classList.add('dragover');
+    });
+
+    // Drag leave
+    audioDropZone.addEventListener('dragleave', () => {
+        audioDropZone.classList.remove('dragover');
+    });
+
+    // Drop
+    audioDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        audioDropZone.classList.remove('dragover');
+        console.log("Audio file dropped.");
+
+        if (e.dataTransfer.files.length) {
+            const file = e.dataTransfer.files[0];
+            // Check if it's an audio file
+            if (file.type.startsWith('audio/')) {
+                loadAudioIntoPlayer(file, file.name);
+            } else {
+                alert('Please drop an audio file (MP3, WAV, OGG, M4A).');
+            }
         }
     });
 
@@ -268,13 +409,19 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Form submitted.");
 
         // Retrieve edited text from preview
-        const editedText = textPreview.value;
+        let editedText = textPreview.value;
         if (!editedText.trim()) {
             alert('Text preview is empty. Please upload and review your text file.');
             console.log("Text preview is empty.");
             return;
         }
-		
+
+        // **Strip Comments if Enabled**
+        if (stripCommentsCheckbox.checked) {
+            editedText = stripComments(editedText);
+            console.log("Comments stripped. New length:", editedText.length);
+        }
+
 		// **Process Text to Add Pauses if Enabled**
         const addPauses = addPausesCheckbox.checked;
         const pauseDuration = parseInt(pauseDurationInput.value) || 1000; // Default to 1000 ms if invalid
@@ -334,6 +481,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (result.success) {
                         resultDiv.innerHTML = `<a href="${result.file}" download="${result.fileName}" class="btn btn-success">Download Audio: ${result.fileName}</a>`;
                         console.log("Audio generated:", result.fileName);
+
+                        // Also load the generated audio into the main audio player
+                        loadAudioIntoPlayer(result.file, result.fileName);
                     } else {
                         resultDiv.innerHTML = `<p class="text-danger">Error: ${result.error}</p>`;
                         console.log("Error generating audio:", result.error);
@@ -376,6 +526,50 @@ document.addEventListener('DOMContentLoaded', function() {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&apos;');
+    }
+
+    // **Function to Strip Comments from Text**
+    // Removes:
+    // - Lines starting with // (single-line comments)
+    // - Lines starting with /* or ending with */ (multi-line comment markers)
+    // - Lines starting with == (section headers)
+    // - Multi-line /* ... */ blocks
+    function stripComments(text) {
+        // First, remove multi-line /* ... */ blocks (including content between them)
+        let result = text.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // Then process line by line
+        const lines = result.split('\n');
+        const cleanedLines = lines.filter(line => {
+            const trimmed = line.trim();
+            // Skip empty lines that resulted from comment removal
+            if (trimmed === '') return false;
+            // Skip lines starting with //
+            if (trimmed.startsWith('//')) return false;
+            // Skip lines starting with ==
+            if (trimmed.startsWith('==')) return false;
+            // Skip lines that are just /* or */
+            if (trimmed === '/*' || trimmed === '*/') return false;
+            return true;
+        });
+
+        return cleanedLines.join('\n').trim();
+    }
+
+    // **Update character count when strip comments checkbox changes**
+    stripCommentsCheckbox.addEventListener('change', () => {
+        updateStrippedCharCount();
+    });
+
+    function updateStrippedCharCount() {
+        const text = textPreview.value;
+        if (stripCommentsCheckbox.checked && text) {
+            const cleanedText = stripComments(text);
+            cleanCharCountSpan.textContent = cleanedText.length.toLocaleString();
+            strippedCharCountDiv.style.display = 'block';
+        } else {
+            strippedCharCountDiv.style.display = 'none';
+        }
     }
 
     // **Function to Convert Text to SSML with Pauses**
