@@ -58,6 +58,104 @@
         #textPreview {
             resize: vertical;
         }
+        /* **7.1 Input Mode Toggle Styling** */
+        .input-mode-toggle {
+            display: flex;
+            margin-bottom: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .input-mode-toggle .btn {
+            flex: 1;
+            border-radius: 0;
+            border: none;
+            padding: 12px 20px;
+            font-weight: 500;
+        }
+        .input-mode-toggle .btn.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .input-mode-toggle .btn:not(.active) {
+            background-color: #f8f9fa;
+            color: #495057;
+        }
+        .input-mode-toggle .btn:not(.active):hover {
+            background-color: #e9ecef;
+        }
+        /* **7.2 Text Editor Styling** */
+        #textEditorContainer {
+            display: none;
+        }
+        #textEditor {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            min-height: 300px;
+        }
+        .ssml-toolbar {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            padding: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .ssml-toolbar .btn {
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+        .ssml-toolbar .btn i {
+            margin-right: 4px;
+        }
+        #textEditor.with-toolbar {
+            border-radius: 0 0 5px 5px;
+        }
+        /* **7.3 Paragraph Preview Styling** */
+        .paragraph-preview-container {
+            position: relative;
+        }
+        .preview-paragraph-btn {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            z-index: 10;
+        }
+        .char-count {
+            font-size: 12px;
+            color: #6c757d;
+            text-align: right;
+            margin-top: 5px;
+        }
+        .char-count.warning {
+            color: #ffc107;
+        }
+        .char-count.danger {
+            color: #dc3545;
+        }
+        /* **7.4 Selection Preview Styling** */
+        #selectionPreviewContainer {
+            background-color: #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            display: none;
+        }
+        #selectionPreviewContainer.show {
+            display: block;
+        }
+        #selectedTextDisplay {
+            font-style: italic;
+            color: #495057;
+            margin-bottom: 10px;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
         /* **8. Tab Navigation Styling** */
         .nav-tabs {
             border-bottom: 2px solid #dee2e6;
@@ -186,20 +284,90 @@
             <div class="tab-pane fade show active" id="generatorPane" role="tabpanel" aria-labelledby="generator-tab">
 
         <form id="ttsForm">
+            <!-- **10.5 Input Mode Toggle** -->
+            <div class="input-mode-toggle" id="inputModeToggle">
+                <button type="button" class="btn active" id="fileUploadMode" data-mode="file">
+                    <i class="fas fa-file-upload"></i> File Upload
+                </button>
+                <button type="button" class="btn" id="textEditorMode" data-mode="editor">
+                    <i class="fas fa-edit"></i> Text Editor
+                </button>
+            </div>
+
             <!-- **11. Drag-and-Drop File Upload Section** -->
-            <div
-                id="dropZone"
-                class="mb-3"
-            >
-                <p>Drag and drop a text file here or click to select one.</p>
-                <input
-                    type="file"
-                    id="textFile"
-                    name="textFile"
-                    accept=".txt"
-                    required
-                    hidden
-                />
+            <div id="fileUploadContainer">
+                <div
+                    id="dropZone"
+                    class="mb-3"
+                >
+                    <p>Drag and drop a text file here or click to select one.</p>
+                    <input
+                        type="file"
+                        id="textFile"
+                        name="textFile"
+                        accept=".txt"
+                        hidden
+                    />
+                </div>
+            </div>
+
+            <!-- **11.5 Text Editor Section** -->
+            <div id="textEditorContainer">
+                <!-- SSML Helper Toolbar -->
+                <div class="ssml-toolbar">
+                    <button type="button" class="btn btn-outline-secondary" id="ssmlPause" title="Insert pause">
+                        <i class="fas fa-pause"></i> Pause
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="ssmlEmphasis" title="Add emphasis">
+                        <i class="fas fa-bold"></i> Emphasis
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="ssmlSlow" title="Speak slowly">
+                        <i class="fas fa-tachometer-alt"></i> Slow
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="ssmlFast" title="Speak fast">
+                        <i class="fas fa-forward"></i> Fast
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="ssmlWhisper" title="Whisper effect">
+                        <i class="fas fa-volume-down"></i> Whisper
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="ssmlSayAs" title="Say as (number, date, etc.)">
+                        <i class="fas fa-hashtag"></i> Say As
+                    </button>
+                    <div class="ml-auto">
+                        <button type="button" class="btn btn-outline-info" id="ssmlHelp" title="SSML Help">
+                            <i class="fas fa-question-circle"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Text Editor -->
+                <div class="paragraph-preview-container">
+                    <textarea
+                        id="textEditor"
+                        class="form-control with-toolbar"
+                        rows="12"
+                        placeholder="Type or paste your text here...
+
+You can use SSML tags for advanced control:
+• <break time='500ms'/> - Add pauses
+• <emphasis level='strong'>text</emphasis> - Add emphasis
+• <prosody rate='slow'>text</prosody> - Control speed
+
+Select any text and click 'Preview Selection' to hear it!"
+                    ></textarea>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <div class="char-count" id="editorCharCount">0 characters</div>
+                </div>
+
+                <!-- Selection Preview Section -->
+                <div id="selectionPreviewContainer">
+                    <small class="text-muted">Selected text:</small>
+                    <div id="selectedTextDisplay"></div>
+                    <button type="button" class="btn btn-sm btn-info" id="previewSelectionBtn">
+                        <i class="fas fa-play"></i> Preview Selection
+                    </button>
+                    <span id="selectionPreviewStatus" class="ml-2 small"></span>
+                </div>
             </div>
 			
 			<!-- **Add Checkbox for Pauses Between Sentences** -->

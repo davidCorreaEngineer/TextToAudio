@@ -408,10 +408,11 @@ app.get('/voices', apiKeyAuthMiddleware, async (req, res) => {
 
 // **9. Test Voice Endpoint (Do Not Save Audio Files)**
 // Protected by API key authentication and rate limited
+// Supports both default test sentences and custom text preview
 app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(), async (req, res) => {
     try {
-        const { language, voice, speakingRate, pitch } = req.body;
-        console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}`);
+        const { language, voice, speakingRate, pitch, customText, useSsml } = req.body;
+        console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}, CustomText=${customText ? 'provided' : 'not provided'}, UseSsml=${useSsml}`);
 
 		const testSentences = {
 			'en-US': "How can I improve my English pronunciation?",
@@ -429,12 +430,34 @@ app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(
 			'tr-TR': "Hızlı kahverengi tilki tembel köpeğin üstünden atlar."
 		};
 
+        // Use custom text if provided, otherwise use default test sentence
+        let testText;
+        let useCustomSsml = false;
 
-        const testText = testSentences[language] || "This is a test of the selected voice.";
-        console.log(`Test sentence: "${testText}"`);
+        if (customText && customText.trim()) {
+            testText = customText.trim();
+            useCustomSsml = useSsml === true || useSsml === 'true';
+            // Limit preview text length to prevent abuse
+            const maxPreviewLength = 500;
+            if (testText.length > maxPreviewLength) {
+                testText = testText.substring(0, maxPreviewLength);
+                console.log(`Custom text truncated to ${maxPreviewLength} characters for preview.`);
+            }
+        } else {
+            testText = testSentences[language] || "This is a test of the selected voice.";
+        }
+        console.log(`Test sentence: "${testText.substring(0, 100)}${testText.length > 100 ? '...' : ''}"`);
+
+        // Build input based on whether SSML is used
+        let input;
+        if (useCustomSsml) {
+            input = { ssml: testText };
+        } else {
+            input = { text: testText };
+        }
 
         const request = {
-            input: { text: testText },
+            input: input,
             voice: { languageCode: language, name: voice },
             audioConfig: {
                 audioEncoding: 'MP3',

@@ -74,6 +74,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const audioFileInfo = document.getElementById('audioFileInfo');
     const audioFileNameSpan = document.getElementById('audioFileName');
 
+    // Text Editor Elements
+    const fileUploadModeBtn = document.getElementById('fileUploadMode');
+    const textEditorModeBtn = document.getElementById('textEditorMode');
+    const fileUploadContainer = document.getElementById('fileUploadContainer');
+    const textEditorContainer = document.getElementById('textEditorContainer');
+    const textEditor = document.getElementById('textEditor');
+    const editorCharCount = document.getElementById('editorCharCount');
+    const selectionPreviewContainer = document.getElementById('selectionPreviewContainer');
+    const selectedTextDisplay = document.getElementById('selectedTextDisplay');
+    const previewSelectionBtn = document.getElementById('previewSelectionBtn');
+    const selectionPreviewStatus = document.getElementById('selectionPreviewStatus');
+
+    // SSML Toolbar Buttons
+    const ssmlPauseBtn = document.getElementById('ssmlPause');
+    const ssmlEmphasisBtn = document.getElementById('ssmlEmphasis');
+    const ssmlSlowBtn = document.getElementById('ssmlSlow');
+    const ssmlFastBtn = document.getElementById('ssmlFast');
+    const ssmlWhisperBtn = document.getElementById('ssmlWhisper');
+    const ssmlSayAsBtn = document.getElementById('ssmlSayAs');
+    const ssmlHelpBtn = document.getElementById('ssmlHelp');
+
+    // Track current input mode
+    let currentInputMode = 'file'; // 'file' or 'editor'
+
     // **1. Initialize Chart Variables**
     let usageChart;
     let voiceTypeChart;
@@ -394,6 +418,267 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("Pitch changed to:", pitchInput.value);
     });
 
+    // ==========================================================================
+    // INPUT MODE TOGGLE (File Upload vs Text Editor)
+    // ==========================================================================
+
+    function setInputMode(mode) {
+        currentInputMode = mode;
+        console.log("Input mode changed to:", mode);
+
+        if (mode === 'file') {
+            fileUploadModeBtn.classList.add('active');
+            textEditorModeBtn.classList.remove('active');
+            fileUploadContainer.style.display = 'block';
+            textEditorContainer.style.display = 'none';
+        } else {
+            fileUploadModeBtn.classList.remove('active');
+            textEditorModeBtn.classList.add('active');
+            fileUploadContainer.style.display = 'none';
+            textEditorContainer.style.display = 'block';
+            // Sync text preview to editor if there's content
+            if (textPreview.value && !textEditor.value) {
+                textEditor.value = textPreview.value;
+                updateEditorCharCount();
+            }
+        }
+    }
+
+    fileUploadModeBtn.addEventListener('click', () => setInputMode('file'));
+    textEditorModeBtn.addEventListener('click', () => setInputMode('editor'));
+
+    // ==========================================================================
+    // TEXT EDITOR FUNCTIONALITY
+    // ==========================================================================
+
+    // Update character count
+    function updateEditorCharCount() {
+        const length = textEditor.value.length;
+        editorCharCount.textContent = `${length.toLocaleString()} characters`;
+
+        // Update warning class based on character count
+        editorCharCount.classList.remove('warning', 'danger');
+        if (length > MAX_TEXT_LENGTH) {
+            editorCharCount.classList.add('danger');
+        } else if (length > MAX_TEXT_LENGTH * 0.8) {
+            editorCharCount.classList.add('warning');
+        }
+    }
+
+    textEditor.addEventListener('input', updateEditorCharCount);
+
+    // Handle text selection for preview
+    textEditor.addEventListener('mouseup', handleTextSelection);
+    textEditor.addEventListener('keyup', handleTextSelection);
+
+    function handleTextSelection() {
+        const selectedText = textEditor.value.substring(
+            textEditor.selectionStart,
+            textEditor.selectionEnd
+        ).trim();
+
+        if (selectedText && selectedText.length > 0) {
+            // Show selection preview container
+            selectionPreviewContainer.classList.add('show');
+            selectedTextDisplay.textContent = selectedText.length > 100
+                ? selectedText.substring(0, 100) + '...'
+                : selectedText;
+            selectionPreviewStatus.textContent = '';
+        } else {
+            selectionPreviewContainer.classList.remove('show');
+        }
+    }
+
+    // Preview selected text
+    previewSelectionBtn.addEventListener('click', async function() {
+        const selectedText = textEditor.value.substring(
+            textEditor.selectionStart,
+            textEditor.selectionEnd
+        ).trim();
+
+        if (!selectedText) {
+            selectionPreviewStatus.textContent = 'No text selected';
+            selectionPreviewStatus.style.color = '#dc3545';
+            return;
+        }
+
+        const voice = voiceSelect.value;
+        if (!voice) {
+            selectionPreviewStatus.textContent = 'Please select a voice first';
+            selectionPreviewStatus.style.color = '#dc3545';
+            return;
+        }
+
+        selectionPreviewStatus.textContent = 'Generating preview...';
+        selectionPreviewStatus.style.color = '#6c757d';
+        previewSelectionBtn.disabled = true;
+
+        try {
+            // Check if text contains SSML tags
+            const containsSSML = /<[^>]+>/.test(selectedText);
+            let textToSend = selectedText;
+
+            // Wrap in <speak> if it contains SSML but doesn't have the wrapper
+            if (containsSSML && !selectedText.trim().startsWith('<speak>')) {
+                textToSend = `<speak>${selectedText}</speak>`;
+            }
+
+            const response = await fetch('/test-voice', {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({
+                    language: languageSelect.value,
+                    voice: voice,
+                    speakingRate: speakingRateInput.value,
+                    pitch: pitchInput.value,
+                    customText: textToSend,
+                    useSsml: containsSSML
+                })
+            });
+
+            if (response.status === 401 || response.status === 403) {
+                selectionPreviewStatus.textContent = 'Authentication failed';
+                selectionPreviewStatus.style.color = '#dc3545';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Failed to preview text');
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                if (currentAudioUrl) {
+                    URL.revokeObjectURL(currentAudioUrl);
+                }
+                const audioBlob = base64ToBlob(result.audioContent, 'audio/mp3');
+                currentAudioUrl = URL.createObjectURL(audioBlob);
+                audioPlayer.src = currentAudioUrl;
+                audioPlayer.style.display = 'block';
+                audioPlayer.play();
+                selectionPreviewStatus.textContent = 'Playing preview';
+                selectionPreviewStatus.style.color = '#28a745';
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error previewing selection:', error);
+            selectionPreviewStatus.textContent = 'Error: ' + error.message;
+            selectionPreviewStatus.style.color = '#dc3545';
+        } finally {
+            previewSelectionBtn.disabled = false;
+        }
+    });
+
+    // ==========================================================================
+    // SSML TOOLBAR FUNCTIONALITY
+    // ==========================================================================
+
+    function insertSSMLTag(tagStart, tagEnd, placeholder = '') {
+        const start = textEditor.selectionStart;
+        const end = textEditor.selectionEnd;
+        const selectedText = textEditor.value.substring(start, end);
+        const textToWrap = selectedText || placeholder;
+
+        const newText = textEditor.value.substring(0, start)
+            + tagStart + textToWrap + tagEnd
+            + textEditor.value.substring(end);
+
+        textEditor.value = newText;
+
+        // Position cursor appropriately
+        if (selectedText) {
+            textEditor.selectionStart = start;
+            textEditor.selectionEnd = start + tagStart.length + textToWrap.length + tagEnd.length;
+        } else {
+            textEditor.selectionStart = start + tagStart.length;
+            textEditor.selectionEnd = start + tagStart.length + placeholder.length;
+        }
+
+        textEditor.focus();
+        updateEditorCharCount();
+    }
+
+    // Pause button - inserts a break tag
+    ssmlPauseBtn.addEventListener('click', () => {
+        const pauseMs = prompt('Enter pause duration in milliseconds:', '500');
+        if (pauseMs !== null) {
+            const start = textEditor.selectionStart;
+            const pauseTag = `<break time="${pauseMs}ms"/>`;
+            textEditor.value = textEditor.value.substring(0, start)
+                + pauseTag
+                + textEditor.value.substring(start);
+            textEditor.selectionStart = textEditor.selectionEnd = start + pauseTag.length;
+            textEditor.focus();
+            updateEditorCharCount();
+        }
+    });
+
+    // Emphasis button
+    ssmlEmphasisBtn.addEventListener('click', () => {
+        const level = prompt('Emphasis level (strong, moderate, reduced):', 'strong');
+        if (level !== null) {
+            insertSSMLTag(`<emphasis level="${level}">`, '</emphasis>', 'emphasized text');
+        }
+    });
+
+    // Slow speech button
+    ssmlSlowBtn.addEventListener('click', () => {
+        insertSSMLTag('<prosody rate="slow">', '</prosody>', 'slow text');
+    });
+
+    // Fast speech button
+    ssmlFastBtn.addEventListener('click', () => {
+        insertSSMLTag('<prosody rate="fast">', '</prosody>', 'fast text');
+    });
+
+    // Whisper effect
+    ssmlWhisperBtn.addEventListener('click', () => {
+        insertSSMLTag('<prosody volume="x-soft" rate="slow">', '</prosody>', 'whispered text');
+    });
+
+    // Say-as button (for numbers, dates, etc.)
+    ssmlSayAsBtn.addEventListener('click', () => {
+        const interpretAs = prompt(
+            'Interpret as (cardinal, ordinal, characters, fraction, date, time, telephone, currency):',
+            'cardinal'
+        );
+        if (interpretAs !== null) {
+            insertSSMLTag(`<say-as interpret-as="${interpretAs}">`, '</say-as>', '123');
+        }
+    });
+
+    // Help button - show SSML reference
+    ssmlHelpBtn.addEventListener('click', () => {
+        alert(`SSML Quick Reference:
+
+BREAKS/PAUSES:
+<break time="500ms"/> - Pause for 500 milliseconds
+<break strength="strong"/> - Natural pause
+
+EMPHASIS:
+<emphasis level="strong">text</emphasis>
+Levels: strong, moderate, reduced
+
+PROSODY (Speed, Pitch, Volume):
+<prosody rate="slow">text</prosody>
+<prosody pitch="+2st">text</prosody>
+<prosody volume="loud">text</prosody>
+Rate: x-slow, slow, medium, fast, x-fast, or percentage
+Pitch: x-low, low, medium, high, x-high, or +/-Xst
+
+SAY-AS (Interpretation):
+<say-as interpret-as="cardinal">123</say-as>
+<say-as interpret-as="ordinal">1</say-as>
+<say-as interpret-as="characters">ABC</say-as>
+<say-as interpret-as="date" format="mdy">12/25/2024</say-as>
+
+SUB (Substitution):
+<sub alias="World Wide Web">WWW</sub>
+
+Note: Select text before clicking toolbar buttons to wrap existing text.`);
+    });
+
     // **7. Test Voice Functionality**
     testVoiceButton.addEventListener('click', async function() {
         console.log("Test Voice button clicked.");
@@ -452,12 +737,26 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         console.log("Form submitted.");
 
-        // Retrieve edited text from preview
-        let editedText = textPreview.value;
-        if (!editedText.trim()) {
-            alert('Text preview is empty. Please upload and review your text file.');
-            console.log("Text preview is empty.");
-            return;
+        // Retrieve text based on current input mode
+        let editedText;
+        if (currentInputMode === 'editor') {
+            editedText = textEditor.value;
+            if (!editedText.trim()) {
+                alert('Text editor is empty. Please enter some text.');
+                console.log("Text editor is empty.");
+                return;
+            }
+            // Set a default file name for editor mode
+            if (originalFileName === 'audio') {
+                originalFileName = 'text-editor-audio';
+            }
+        } else {
+            editedText = textPreview.value;
+            if (!editedText.trim()) {
+                alert('Text preview is empty. Please upload and review your text file.');
+                console.log("Text preview is empty.");
+                return;
+            }
         }
 
         // **Strip Comments if Enabled**
@@ -473,10 +772,20 @@ document.addEventListener('DOMContentLoaded', function() {
         let processedText = editedText;
         let useSsml = false;
 
-        if (addPauses) {
+        // Check if text already contains SSML tags (from editor mode)
+        const containsSSML = /<[^>]+>/.test(editedText);
+
+        if (containsSSML) {
+            useSsml = true;
+            // Wrap in <speak> if it doesn't have it
+            if (!editedText.trim().startsWith('<speak>')) {
+                processedText = `<speak>${editedText}</speak>`;
+            }
+            console.log("Text contains SSML, using SSML mode.");
+        } else if (addPauses) {
             useSsml = true;
             processedText = convertTextToSsml(editedText, pauseDuration);
-            console.log("Processed text with SSML:", processedText);
+            console.log("Processed text with SSML pauses:", processedText);
         }
 
         const formData = new FormData();
