@@ -3,614 +3,1130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google TTS Generator</title>
-    
-    <!-- **1. Included Bootstrap CSS for Modern UI and Responsive Design** -->
-    <link
-        rel="stylesheet"
-        href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
-    />
-    
-    <!-- **2. Included Chart.js for Data Visualization** -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- **3. Included Font Awesome for Icons** -->
+    <title>VoiceCraft - Text to Speech Generator</title>
+
+    <!-- Google Fonts - Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome for Icons -->
     <link
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
         crossorigin="anonymous"
         referrerpolicy="no-referrer"
     />
-    
+
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            background-color: #f8f9fa; 
+        /* ============================================
+           CSS VARIABLES & DESIGN TOKENS
+           ============================================ */
+        :root {
+            /* Colors */
+            --accent: #0891b2;
+            --accent-hover: #0e7490;
+            --accent-light: #ecfeff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-page: #f1f5f9;
+            --border: #e2e8f0;
+            --border-focus: #0891b2;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+
+            /* Spacing */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+
+            /* Border Radius */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-full: 9999px;
+
+            /* Transitions */
+            --transition-fast: 150ms ease;
+            --transition-normal: 250ms ease;
         }
-        /* **4. Styled Drag-and-Drop Zone** */
-        #dropZone {
-            background-color: #ffffff;
-            border: 2px dashed #ced4da;
-            border-radius: 5px;
-            padding: 30px;
-            text-align: center;
-            cursor: pointer;
-            transition: background-color 0.3s, border-color 0.3s;
+
+        /* ============================================
+           BASE STYLES
+           ============================================ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
-		#pauseDurationContainer {
-            display: none;
-            margin-top: 10px;
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
         }
-        #dropZone.dragover {
-            background-color: #e9ecef;
-            border-color: #495057;
+
+        /* ============================================
+           LAYOUT
+           ============================================ */
+        .app-container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: var(--space-lg);
+            padding-top: var(--space-md);
         }
-        /* **5. Styled Progress Bar** */
-        #progressContainer {
-            display: none;
-            margin-top: 20px;
-        }
-        /* **6. Styled Advanced Settings Section** */
-        #advancedSettings {
-            margin-top: 20px;
-        }
-        /* **7. Styled Text Preview Area** */
-        #textPreview {
-            resize: vertical;
-        }
-        /* **7.1 Input Mode Toggle Styling** */
-        .input-mode-toggle {
+
+        /* ============================================
+           HEADER
+           ============================================ */
+        .app-header {
             display: flex;
-            margin-bottom: 15px;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-xl);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .app-logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .app-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent) 0%, #06b6d4 100%);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+
+        .app-logo-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .usage-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+            position: relative;
+        }
+
+        .usage-indicator:hover {
+            background: var(--border);
+        }
+
+        .usage-bar {
+            width: 60px;
+            height: 6px;
+            background: var(--border);
+            border-radius: var(--radius-full);
             overflow: hidden;
         }
-        .input-mode-toggle .btn {
+
+        .usage-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: var(--radius-full);
+            transition: width var(--transition-normal);
+        }
+
+        .usage-bar-fill.warning {
+            background: var(--warning);
+        }
+
+        .usage-bar-fill.danger {
+            background: var(--error);
+        }
+
+        .usage-text {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .usage-tooltip {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            box-shadow: var(--shadow-lg);
+            min-width: 200px;
+            z-index: 100;
+        }
+
+        .usage-indicator:hover .usage-tooltip {
+            display: block;
+        }
+
+        .usage-tooltip h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: var(--space-sm);
+            color: var(--text-primary);
+        }
+
+        .usage-tooltip-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            padding: var(--space-xs) 0;
+        }
+
+        /* ============================================
+           CARDS
+           ============================================ */
+        .card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-md);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .card-header i {
+            color: var(--accent);
+        }
+
+        /* ============================================
+           INPUT MODE TOGGLE
+           ============================================ */
+        .input-mode-toggle {
+            display: flex;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: var(--space-xs);
+            margin-bottom: var(--space-md);
+        }
+
+        .input-mode-toggle .toggle-btn {
             flex: 1;
-            border-radius: 0;
+            padding: var(--space-sm) var(--space-md);
             border: none;
-            padding: 12px 20px;
+            background: transparent;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
             font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
         }
-        .input-mode-toggle .btn.active {
-            background-color: #007bff;
-            color: white;
+
+        .input-mode-toggle .toggle-btn.active {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
         }
-        .input-mode-toggle .btn:not(.active) {
-            background-color: #f8f9fa;
-            color: #495057;
+
+        .input-mode-toggle .toggle-btn:hover:not(.active) {
+            color: var(--text-primary);
         }
-        .input-mode-toggle .btn:not(.active):hover {
-            background-color: #e9ecef;
+
+        /* ============================================
+           DROP ZONE
+           ============================================ */
+        #dropZone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-2xl) var(--space-lg);
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            background: var(--bg-secondary);
         }
-        /* **7.2 Text Editor Styling** */
+
+        #dropZone:hover,
+        #dropZone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        #dropZone .drop-icon {
+            font-size: 2.5rem;
+            color: var(--text-muted);
+            margin-bottom: var(--space-md);
+        }
+
+        #dropZone p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        #dropZone .drop-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: var(--space-xs);
+        }
+
+        /* ============================================
+           TEXT EDITOR
+           ============================================ */
         #textEditorContainer {
             display: none;
         }
-        #textEditor {
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            resize: vertical;
-            min-height: 300px;
-        }
+
         .ssml-toolbar {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-bottom: none;
-            border-radius: 5px 5px 0 0;
-            padding: 8px;
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
+            gap: var(--space-xs);
+            padding: var(--space-sm);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
         }
-        .ssml-toolbar .btn {
-            font-size: 12px;
-            padding: 4px 8px;
+
+        .ssml-toolbar .toolbar-btn {
+            padding: var(--space-xs) var(--space-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
         }
-        .ssml-toolbar .btn i {
-            margin-right: 4px;
+
+        .ssml-toolbar .toolbar-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
-        #textEditor.with-toolbar {
-            border-radius: 0 0 5px 5px;
+
+        .ssml-toolbar .toolbar-btn i {
+            font-size: 0.625rem;
         }
-        /* **7.3 Paragraph Preview Styling** */
-        .paragraph-preview-container {
-            position: relative;
+
+        .ssml-toolbar .toolbar-spacer {
+            flex: 1;
         }
-        .preview-paragraph-btn {
-            position: absolute;
-            right: 10px;
-            bottom: 10px;
-            z-index: 10;
+
+        #textEditor {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            padding: var(--space-md);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            resize: vertical;
+            min-height: 200px;
+            width: 100%;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: border-color var(--transition-fast);
         }
-        .char-count {
-            font-size: 12px;
-            color: #6c757d;
-            text-align: right;
-            margin-top: 5px;
+
+        #textEditor:focus {
+            outline: none;
+            border-color: var(--border-focus);
         }
-        .char-count.warning {
-            color: #ffc107;
+
+        .editor-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--space-sm);
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
-        .char-count.danger {
-            color: #dc3545;
-        }
-        /* **7.4 Selection Preview Styling** */
+
+        .char-count.warning { color: var(--warning); }
+        .char-count.danger { color: var(--error); }
+
+        /* Selection Preview */
         #selectionPreviewContainer {
-            background-color: #e9ecef;
-            border-radius: 5px;
-            padding: 10px;
-            margin-top: 10px;
             display: none;
+            margin-top: var(--space-md);
+            padding: var(--space-md);
+            background: var(--accent-light);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--accent);
         }
+
         #selectionPreviewContainer.show {
             display: block;
         }
+
         #selectedTextDisplay {
+            font-size: 0.875rem;
             font-style: italic;
-            color: #495057;
-            margin-bottom: 10px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-sm);
             max-height: 60px;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
-        /* **8. Tab Navigation Styling** */
-        .nav-tabs {
-            border-bottom: 2px solid #dee2e6;
+
+        /* ============================================
+           FORM ELEMENTS
+           ============================================ */
+        .form-row {
+            display: flex;
+            gap: var(--space-md);
+            margin-bottom: var(--space-md);
         }
-        .nav-tabs .nav-link {
-            border: none;
-            border-bottom: 3px solid transparent;
-            color: #6c757d;
-            font-weight: 500;
-            padding: 12px 20px;
-            transition: all 0.2s ease;
+
+        .form-row.voice-row {
+            align-items: flex-end;
         }
-        .nav-tabs .nav-link:hover {
-            border-color: transparent;
-            border-bottom: 3px solid #adb5bd;
-            color: #495057;
+
+        .form-group {
+            flex: 1;
         }
-        .nav-tabs .nav-link.active {
-            border: none;
-            border-bottom: 3px solid #007bff;
-            color: #007bff;
-            background-color: transparent;
+
+        .form-group.small {
+            flex: 0 0 auto;
         }
-        .nav-tabs .nav-link i {
-            margin-right: 8px;
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
         }
-        .tab-content {
-            padding-top: 10px;
-        }
-        /* **9. Dashboard Styling** */
-        #dashboard h2 {
-            margin-bottom: 20px;
-        }
-        /* **9. Summary Cards Styling** */
-        .summary-card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            background-color: #ffffff;
-            text-align: center;
-            transition: transform 0.2s;
-        }
-        .summary-card:hover {
-            transform: translateY(-5px);
-        }
-        .summary-card h5 {
-            margin-bottom: 10px;
-            color: #6c757d;
-        }
-        .summary-card p {
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin: 0;
-        }
-        /* **10. Voice Type Usage Styling** */
-        .voice-usage {
-            margin-bottom: 20px;
-        }
-        .voice-usage .progress {
-            height: 25px;
-        }
-        .voice-usage .progress-bar {
-            line-height: 25px;
-            font-size: 0.9rem;
-        }
-        /* **11. Audio Player Section Styling** */
-        #audioPlayerSection {
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 30px;
-            margin-bottom: 30px;
-        }
-        #audioDropZone {
-            background-color: #f8f9fa;
-            border: 2px dashed #ced4da;
-            border-radius: 5px;
-            padding: 20px;
-            text-align: center;
+
+        .form-select {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            background: var(--bg-primary);
             cursor: pointer;
-            transition: background-color 0.3s, border-color 0.3s;
-            margin-bottom: 15px;
+            transition: border-color var(--transition-fast);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
         }
-        #audioDropZone.dragover {
-            background-color: #e9ecef;
-            border-color: #495057;
+
+        .form-select:focus {
+            outline: none;
+            border-color: var(--border-focus);
         }
-        #audioDropZone i {
-            font-size: 2rem;
-            color: #6c757d;
-            margin-bottom: 10px;
+
+        /* ============================================
+           SLIDERS
+           ============================================ */
+        .slider-group {
+            display: flex;
+            gap: var(--space-lg);
         }
-        #audioFileName {
+
+        .slider-item {
+            flex: 1;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-xs);
+        }
+
+        .slider-label {
+            font-size: 0.75rem;
             font-weight: 500;
-            color: #495057;
+            color: var(--text-secondary);
         }
+
+        .slider-value {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--accent);
+            background: var(--accent-light);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+        }
+
+        .slider-input {
+            width: 100%;
+            height: 6px;
+            border-radius: var(--radius-full);
+            background: var(--border);
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .slider-input::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            transition: transform var(--transition-fast);
+        }
+
+        .slider-input::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        /* ============================================
+           BUTTONS
+           ============================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .btn-icon {
+            padding: var(--space-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+        }
+
+        .btn-icon:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-primary:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .btn-sm {
+            padding: var(--space-xs) var(--space-sm);
+            font-size: 0.75rem;
+        }
+
+        /* ============================================
+           OPTIONS CARD
+           ============================================ */
+        .options-row {
+            display: flex;
+            gap: var(--space-lg);
+            flex-wrap: wrap;
+        }
+
+        .option-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .option-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .option-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .option-value {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+        }
+
+        #pauseDurationContainer {
+            display: none;
+            margin-left: var(--space-sm);
+        }
+
+        #pauseDurationContainer input {
+            width: 70px;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            text-align: center;
+        }
+
+        /* ============================================
+           GENERATE BUTTON
+           ============================================ */
+        .generate-card {
+            padding: 0;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: var(--space-md) var(--space-lg);
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, var(--accent) 0%, #06b6d4 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            box-shadow: var(--shadow-md);
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .generate-btn:active {
+            transform: translateY(0);
+        }
+
+        .generate-btn:disabled {
+            background: var(--text-muted);
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .generate-btn i {
+            font-size: 1.125rem;
+        }
+
+        /* ============================================
+           PROGRESS
+           ============================================ */
+        #progressContainer {
+            display: none;
+            margin-bottom: var(--space-md);
+        }
+
+        .progress-bar-wrapper {
+            height: 8px;
+            background: var(--border);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+
+        #progressBar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #06b6d4);
+            border-radius: var(--radius-full);
+            transition: width var(--transition-normal);
+        }
+
+        /* ============================================
+           OUTPUT CARD
+           ============================================ */
+        .output-card {
+            display: none;
+        }
+
+        .output-card.show {
+            display: block;
+        }
+
+        #result {
+            margin-bottom: var(--space-md);
+        }
+
+        #result .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--success);
+            color: white;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: background var(--transition-fast);
+        }
+
+        #result .download-btn:hover {
+            background: #059669;
+        }
+
+        #result .error-message {
+            color: var(--error);
+            font-size: 0.875rem;
+        }
+
+        /* Audio Player */
+        .audio-player-wrapper {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+        }
+
+        .audio-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-sm);
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .audio-info i {
+            color: var(--accent);
+        }
+
         #mainAudioPlayer {
             width: 100%;
-            margin-top: 10px;
+            height: 40px;
+        }
+
+        /* Audio drop zone in output */
+        #audioDropZone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            background: var(--bg-secondary);
+        }
+
+        #audioDropZone:hover,
+        #audioDropZone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        #audioDropZone i {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            margin-bottom: var(--space-sm);
+        }
+
+        #audioDropZone p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin: 0;
+        }
+
+        #audioDropZone small {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Test audio section */
+        #testSentence {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-bottom: var(--space-sm);
+        }
+
+        #audioPlayer {
+            display: none;
+            width: 100%;
+            margin-top: var(--space-sm);
+        }
+
+        /* Hidden elements */
+        #textPreview {
+            display: none;
+        }
+
+        #fileSize {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: var(--space-sm);
+        }
+
+        #strippedCharCount {
+            display: none;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-left: var(--space-sm);
+        }
+
+        /* ============================================
+           RESPONSIVE
+           ============================================ */
+        @media (max-width: 640px) {
+            .app-container {
+                padding: var(--space-md);
+            }
+
+            .app-header {
+                flex-direction: column;
+                gap: var(--space-md);
+                text-align: center;
+            }
+
+            .form-row {
+                flex-direction: column;
+            }
+
+            .form-row.voice-row {
+                align-items: stretch;
+            }
+
+            .form-row.voice-row .btn-icon {
+                width: 100%;
+            }
+
+            .slider-group {
+                flex-direction: column;
+            }
+
+            .options-row {
+                flex-direction: column;
+                gap: var(--space-md);
+            }
+
+            .ssml-toolbar {
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container my-5">
-        <h1 class="text-center mb-4">Google TTS Generator</h1>
-
-        <!-- Tab Navigation -->
-        <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
-            <li class="nav-item">
-                <a class="nav-link active" id="generator-tab" data-toggle="tab" href="#generatorPane" role="tab" aria-controls="generatorPane" aria-selected="true">
-                    <i class="fas fa-microphone-alt"></i> Text to Speech
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="dashboard-tab" data-toggle="tab" href="#dashboardPane" role="tab" aria-controls="dashboardPane" aria-selected="false">
-                    <i class="fas fa-chart-bar"></i> Dashboard
-                </a>
-            </li>
-        </ul>
-
-        <!-- Tab Content -->
-        <div class="tab-content" id="mainTabContent">
-            <!-- Generator Tab Pane -->
-            <div class="tab-pane fade show active" id="generatorPane" role="tabpanel" aria-labelledby="generator-tab">
-
-        <form id="ttsForm">
-            <!-- **10.5 Input Mode Toggle** -->
-            <div class="input-mode-toggle" id="inputModeToggle">
-                <button type="button" class="btn active" id="fileUploadMode" data-mode="file">
-                    <i class="fas fa-file-upload"></i> File Upload
-                </button>
-                <button type="button" class="btn" id="textEditorMode" data-mode="editor">
-                    <i class="fas fa-edit"></i> Text Editor
-                </button>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="app-logo">
+                <div class="app-logo-icon">
+                    <i class="fas fa-microphone-alt"></i>
+                </div>
+                <span class="app-logo-text">VoiceCraft</span>
             </div>
-
-            <!-- **11. Drag-and-Drop File Upload Section** -->
-            <div id="fileUploadContainer">
-                <div
-                    id="dropZone"
-                    class="mb-3"
-                >
-                    <p>Drag and drop a text file here or click to select one.</p>
-                    <input
-                        type="file"
-                        id="textFile"
-                        name="textFile"
-                        accept=".txt"
-                        hidden
-                    />
+            <div class="usage-indicator" id="usageIndicator">
+                <div class="usage-bar">
+                    <div class="usage-bar-fill" id="usageBarFill" style="width: 0%"></div>
+                </div>
+                <span class="usage-text" id="usageText">0%</span>
+                <div class="usage-tooltip" id="usageTooltip">
+                    <h4>Monthly Usage</h4>
+                    <div id="usageTooltipContent">
+                        <div class="usage-tooltip-item">
+                            <span>Loading...</span>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </header>
 
-            <!-- **11.5 Text Editor Section** -->
-            <div id="textEditorContainer">
-                <!-- SSML Helper Toolbar -->
-                <div class="ssml-toolbar">
-                    <button type="button" class="btn btn-outline-secondary" id="ssmlPause" title="Insert pause">
-                        <i class="fas fa-pause"></i> Pause
+        <form id="ttsForm">
+            <!-- Card 1: Input -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Your Text</span>
+                </div>
+
+                <!-- Input Mode Toggle -->
+                <div class="input-mode-toggle" id="inputModeToggle">
+                    <button type="button" class="toggle-btn active" id="fileUploadMode" data-mode="file">
+                        <i class="fas fa-upload"></i> Upload File
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" id="ssmlEmphasis" title="Add emphasis">
-                        <i class="fas fa-bold"></i> Emphasis
+                    <button type="button" class="toggle-btn" id="textEditorMode" data-mode="editor">
+                        <i class="fas fa-keyboard"></i> Write Text
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" id="ssmlSlow" title="Speak slowly">
-                        <i class="fas fa-tachometer-alt"></i> Slow
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" id="ssmlFast" title="Speak fast">
-                        <i class="fas fa-forward"></i> Fast
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" id="ssmlWhisper" title="Whisper effect">
-                        <i class="fas fa-volume-down"></i> Whisper
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" id="ssmlSayAs" title="Say as (number, date, etc.)">
-                        <i class="fas fa-hashtag"></i> Say As
-                    </button>
-                    <div class="ml-auto">
-                        <button type="button" class="btn btn-outline-info" id="ssmlHelp" title="SSML Help">
+                </div>
+
+                <!-- File Upload Section -->
+                <div id="fileUploadContainer">
+                    <div id="dropZone">
+                        <div class="drop-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <p>Drop your text file here or click to browse</p>
+                        <p class="drop-hint">Supports .txt files</p>
+                        <input type="file" id="textFile" name="textFile" accept=".txt" hidden />
+                    </div>
+                    <div id="fileSize"></div>
+                </div>
+
+                <!-- Text Editor Section -->
+                <div id="textEditorContainer">
+                    <div class="ssml-toolbar">
+                        <button type="button" class="toolbar-btn" id="ssmlPause" title="Insert pause">
+                            <i class="fas fa-pause"></i> Pause
+                        </button>
+                        <button type="button" class="toolbar-btn" id="ssmlEmphasis" title="Add emphasis">
+                            <i class="fas fa-bold"></i> Emphasis
+                        </button>
+                        <button type="button" class="toolbar-btn" id="ssmlSlow" title="Speak slowly">
+                            <i class="fas fa-backward"></i> Slow
+                        </button>
+                        <button type="button" class="toolbar-btn" id="ssmlFast" title="Speak fast">
+                            <i class="fas fa-forward"></i> Fast
+                        </button>
+                        <button type="button" class="toolbar-btn" id="ssmlWhisper" title="Whisper">
+                            <i class="fas fa-volume-down"></i> Whisper
+                        </button>
+                        <button type="button" class="toolbar-btn" id="ssmlSayAs" title="Say as">
+                            <i class="fas fa-hashtag"></i> Say As
+                        </button>
+                        <div class="toolbar-spacer"></div>
+                        <button type="button" class="toolbar-btn" id="ssmlHelp" title="SSML Help">
                             <i class="fas fa-question-circle"></i>
                         </button>
                     </div>
-                </div>
-                <!-- Text Editor -->
-                <div class="paragraph-preview-container">
                     <textarea
                         id="textEditor"
-                        class="form-control with-toolbar"
-                        rows="12"
                         placeholder="Type or paste your text here...
 
 You can use SSML tags for advanced control:
 • <break time='500ms'/> - Add pauses
-• <emphasis level='strong'>text</emphasis> - Add emphasis
-• <prosody rate='slow'>text</prosody> - Control speed
+• <emphasis level='strong'>text</emphasis> - Emphasis
+• <prosody rate='slow'>text</prosody> - Speed control
 
-Select any text and click 'Preview Selection' to hear it!"
+Select text and use the toolbar buttons above!"
                     ></textarea>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mt-2">
-                    <div class="char-count" id="editorCharCount">0 characters</div>
-                </div>
+                    <div class="editor-footer">
+                        <span class="char-count" id="editorCharCount">0 characters</span>
+                    </div>
 
-                <!-- Selection Preview Section -->
-                <div id="selectionPreviewContainer">
-                    <small class="text-muted">Selected text:</small>
-                    <div id="selectedTextDisplay"></div>
-                    <button type="button" class="btn btn-sm btn-info" id="previewSelectionBtn">
-                        <i class="fas fa-play"></i> Preview Selection
-                    </button>
-                    <span id="selectionPreviewStatus" class="ml-2 small"></span>
+                    <div id="selectionPreviewContainer">
+                        <div id="selectedTextDisplay"></div>
+                        <button type="button" class="btn btn-sm btn-secondary" id="previewSelectionBtn">
+                            <i class="fas fa-play"></i> Preview Selection
+                        </button>
+                        <span id="selectionPreviewStatus" style="margin-left: 8px; font-size: 0.75rem;"></span>
+                    </div>
                 </div>
-            </div>
-			
-			<!-- **Add Checkbox for Pauses Between Sentences** -->
-			<div class="form-group">
-                <input type="checkbox" id="addPauses" name="addPauses">
-                <label for="addPauses">Add pauses between sentences</label>
             </div>
 
-			<!-- **Add Checkbox for Stripping Comments** -->
-			<div class="form-group">
-                <input type="checkbox" id="stripComments" name="stripComments">
-                <label for="stripComments">Strip comments (// and /* */ and == headers)</label>
-                <small class="form-text text-muted" id="strippedCharCount" style="display: none;">
-                    Characters after stripping: <span id="cleanCharCount">0</span>
-                </small>
-            </div>
-			
-			<!-- **Input for Pause Duration (ms)** -->
-            <div class="form-group" id="pauseDurationContainer">
-                <label for="pauseDuration">Pause Duration (ms):</label>
-                <input type="number" class="form-control" id="pauseDuration" name="pauseDuration" min="0" value="1000">
-            </div>
-            
-            <!-- **12. File Size Display** -->
-            <div id="fileSize" class="mb-3"></div>
-            
-            <!-- **13. Language Selection** -->
-            <div class="form-group">
-                <label for="language">Language:</label>
-                <select class="form-control" id="language" name="language" required>
-                    <option value="en-GB">English (UK)</option>
-                    <option value="en-US">English (US)</option>
-                    <option value="en-AU">English (AU)</option>
-                    <option value="nl-NL">Dutch</option>
-                    <option value="es-ES">Spanish</option>
-					<option value="es-US">Spanish USA</option>
-                    <option value="de-DE">German</option>
-                    <option value="ja-JP">Japanese</option>
-					<option value="it-IT">Italian</option>
-                    <option value="fr-FR">French</option>
-                    <option value="pt-PT">Portuguese (Portugal)</option>
-                    <option value="pt-BR">Portuguese (Brazil)</option>
-					<option value="tr-TR">Turkish</option>
-                </select>
-            </div>
-            
-            <!-- **14. Voice Selection** -->
-            <div class="form-group">
-                <label for="voice">Voice:</label>
-                <select class="form-control" id="voice" name="voice" required>
-                    <option value="">Select a voice</option>
-                    <!-- Options will be populated dynamically -->
-                </select>
-            </div>
-            
-            <!-- **15. Advanced Settings Toggle Button** -->
-            <div class="form-group">
-                <button
-                    class="btn btn-link"
-                    type="button"
-                    data-toggle="collapse"
-                    data-target="#advancedSettings"
-                >
-                    Advanced Settings
-                </button>
-            </div>
-            
-            <!-- **16. Advanced Settings Section** -->
-            <div class="collapse" id="advancedSettings">
-                <!-- Speaking Rate -->
-                <div class="form-group">
-                    <label for="speakingRate">Speaking Rate:</label>
-                    <input
-                        type="range"
-                        class="custom-range"
-                        id="speakingRate"
-                        name="speakingRate"
-                        min="0.25"
-                        max="4.0"
-                        step="0.01"
-                        value="1.0"
-                    />
-                    <small class="form-text text-muted">
-                        Value: <span id="speakingRateValue">1.0</span>
-                    </small>
+            <!-- Card 2: Voice Selection -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Voice</span>
                 </div>
-                <!-- Pitch -->
-                <div class="form-group">
-                    <label for="pitch">Pitch:</label>
-                    <input
-                        type="range"
-                        class="custom-range"
-                        id="pitch"
-                        name="pitch"
-                        min="-20.0"
-                        max="20.0"
-                        step="0.1"
-                        value="0"
-                    />
-                    <small class="form-text text-muted">
-                        Value: <span id="pitchValue">0</span>
-                    </small>
+
+                <div class="form-row voice-row">
+                    <div class="form-group">
+                        <label class="form-label" for="language">Language</label>
+                        <select class="form-select" id="language" name="language" required>
+                            <option value="en-US">English (US)</option>
+                            <option value="en-GB">English (UK)</option>
+                            <option value="en-AU">English (AU)</option>
+                            <option value="es-ES">Spanish (Spain)</option>
+                            <option value="es-US">Spanish (US)</option>
+                            <option value="de-DE">German</option>
+                            <option value="fr-FR">French</option>
+                            <option value="it-IT">Italian</option>
+                            <option value="pt-PT">Portuguese (PT)</option>
+                            <option value="pt-BR">Portuguese (BR)</option>
+                            <option value="nl-NL">Dutch</option>
+                            <option value="ja-JP">Japanese</option>
+                            <option value="tr-TR">Turkish</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="voice">Voice</label>
+                        <select class="form-select" id="voice" name="voice" required>
+                            <option value="">Select a voice</option>
+                        </select>
+                    </div>
+                    <div class="form-group small">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" class="btn btn-icon" id="testVoiceButton" title="Test voice">
+                            <i class="fas fa-play"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-item">
+                        <div class="slider-header">
+                            <span class="slider-label">Speed</span>
+                            <span class="slider-value" id="speakingRateValue">1.0x</span>
+                        </div>
+                        <input
+                            type="range"
+                            class="slider-input"
+                            id="speakingRate"
+                            name="speakingRate"
+                            min="0.25"
+                            max="4.0"
+                            step="0.05"
+                            value="1.0"
+                        />
+                    </div>
+                    <div class="slider-item">
+                        <div class="slider-header">
+                            <span class="slider-label">Pitch</span>
+                            <span class="slider-value" id="pitchValue">0</span>
+                        </div>
+                        <input
+                            type="range"
+                            class="slider-input"
+                            id="pitch"
+                            name="pitch"
+                            min="-20.0"
+                            max="20.0"
+                            step="0.5"
+                            value="0"
+                        />
+                    </div>
                 </div>
             </div>
-            
-            <!-- **17. Text Preview and Edit Section** -->
-            <div class="form-group">
-                <label for="textPreview">Text Preview:</label>
-                <textarea
-                    id="textPreview"
-                    name="textPreview"
-                    class="form-control"
-                    rows="10"
-                    readonly
-                ></textarea>
+
+            <!-- Card 3: Options -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>Options</span>
+                </div>
+
+                <div class="options-row">
+                    <div class="option-item">
+                        <input type="checkbox" class="option-checkbox" id="addPauses" name="addPauses" />
+                        <label class="option-label" for="addPauses">Add pauses between sentences</label>
+                        <div id="pauseDurationContainer">
+                            <input type="number" id="pauseDuration" name="pauseDuration" min="100" max="5000" value="1000" /> ms
+                        </div>
+                    </div>
+                    <div class="option-item">
+                        <input type="checkbox" class="option-checkbox" id="stripComments" name="stripComments" />
+                        <label class="option-label" for="stripComments">Strip code comments</label>
+                        <span id="strippedCharCount">
+                            <span id="cleanCharCount">0</span> chars after
+                        </span>
+                    </div>
+                </div>
             </div>
-            
-            <!-- **18. Action Buttons** -->
-            <div class="form-group text-center">
-                <button type="button" class="btn btn-secondary mr-2" id="testVoiceButton">
-                    Test Voice
+
+            <!-- Generate Button -->
+            <div class="card generate-card">
+                <div id="progressContainer">
+                    <div class="progress-bar-wrapper">
+                        <div id="progressBar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <button type="submit" class="generate-btn">
+                    <i class="fas fa-headphones"></i>
+                    Generate Audio
                 </button>
-                <button type="submit" class="btn btn-primary">Generate Audio</button>
             </div>
         </form>
-        
-        <!-- **19. Progress Bar** -->
-        <div id="progressContainer" class="progress">
-            <div
-                id="progressBar"
-                class="progress-bar progress-bar-striped progress-bar-animated"
-                role="progressbar"
-                style="width: 0%;"
-                aria-valuenow="0"
-                aria-valuemin="0"
-                aria-valuemax="100"
-            ></div>
-        </div>
-        
-        <!-- **20. Test Sentence Display** -->
-        <div id="testSentence" class="mt-4"></div>
-        
-        <!-- **21. Test Audio Player (for voice testing)** -->
-        <audio id="audioPlayer" class="mt-3 w-100" controls style="display: none;"></audio>
 
-        <!-- **22. Result Display** -->
-        <div id="result" class="mt-4"></div>
+        <!-- Test Voice Audio (hidden) -->
+        <div id="testSentence"></div>
+        <audio id="audioPlayer" controls></audio>
 
-        <!-- **23. Audio Player Section** -->
-        <div id="audioPlayerSection">
-            <h4><i class="fas fa-headphones"></i> Audio Player</h4>
-            <p class="text-muted small">Upload an audio file or generate audio above to play it here.</p>
-
-            <!-- Hidden file input (outside drop zone to prevent event issues) -->
-            <input type="file" id="audioFileInput" accept="audio/*" hidden />
-
-            <!-- Audio Drop Zone -->
-            <div id="audioDropZone">
-                <i class="fas fa-music"></i>
-                <p class="mb-0">Drag and drop an audio file here or click to select</p>
-                <small class="text-muted">Supports MP3, WAV, OGG, M4A</small>
+        <!-- Card 5: Output -->
+        <div class="card output-card" id="outputCard">
+            <div class="card-header">
+                <i class="fas fa-volume-up"></i>
+                <span>Output</span>
             </div>
 
-            <!-- Audio File Name Display -->
-            <div id="audioFileInfo" style="display: none;">
-                <p class="mb-2"><i class="fas fa-file-audio"></i> <span id="audioFileName">No file loaded</span></p>
-            </div>
+            <div id="result"></div>
 
-            <!-- Main Audio Player -->
-            <audio id="mainAudioPlayer" controls style="display: none;"></audio>
+            <div class="audio-player-wrapper">
+                <input type="file" id="audioFileInput" accept="audio/*" hidden />
 
-            <!-- Audio Diagnostics -->
-            <div class="mt-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="testAudioBtn">
-                    <i class="fas fa-volume-up"></i> Test Browser Audio
-                </button>
-                <small class="text-muted ml-2" id="audioTestResult"></small>
-            </div>
-        </div>
+                <div id="audioDropZone">
+                    <i class="fas fa-music"></i>
+                    <p>Drop an audio file here or click to upload</p>
+                    <small>MP3, WAV, OGG, M4A</small>
+                </div>
 
-            </div>
-            <!-- End of Generator Tab Pane -->
-
-            <!-- Dashboard Tab Pane -->
-            <div class="tab-pane fade" id="dashboardPane" role="tabpanel" aria-labelledby="dashboard-tab">
-
-        <!-- **24. Dashboard Section** -->
-        <div id="dashboard">
-            <h2>Usage Dashboard</h2>
-            <!-- **23.1. Summary Cards** -->
-            <div class="row mb-4">
-                <div class="col-md-4">
-                    <div class="summary-card">
-                        <h5>Total Usage</h5>
-                        <p id="totalUsage">0</p>
+                <div id="audioFileInfo" style="display: none;">
+                    <div class="audio-info">
+                        <i class="fas fa-file-audio"></i>
+                        <span id="audioFileName">No file loaded</span>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="summary-card">
-                        <h5>Unique Voices Used</h5>
-                        <p id="uniqueVoices">0</p>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="summary-card">
-                        <h5>Current Month Usage</h5>
-                        <p id="currentMonthUsage">0</p>
-                    </div>
-                </div>
-            </div>
-            <!-- **23.2. Voice Type Usage Tracking** -->
-            <div class="voice-usage">
-                <h4>Voice Type Consumption</h4>
-                <div id="voiceUsageCards" class="row">
-                    <!-- Voice usage cards will be populated dynamically -->
-                </div>
-            </div>
-            <!-- **23.3. Charts** -->
-            <div class="row">
-                <div class="col-md-6">
-                    <canvas id="usageChart"></canvas>
-                </div>
-                <div class="col-md-6">
-                    <canvas id="voiceTypeChart"></canvas>
+                    <audio id="mainAudioPlayer" controls></audio>
                 </div>
             </div>
         </div>
 
-            </div>
-            <!-- End of Dashboard Tab Pane -->
-
-        </div>
-        <!-- End of Tab Content -->
-
+        <!-- Hidden text preview for compatibility -->
+        <textarea id="textPreview" name="textPreview" readonly hidden></textarea>
     </div>
 
-    <!-- **24. Included jQuery and Bootstrap JS** -->
+    <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script
-        src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"
-    ></script>
-    
-    <!-- **25. Included External app_client.js for Custom Scripts** -->
     <script src="app_client.js"></script>
 </body>
 </html>

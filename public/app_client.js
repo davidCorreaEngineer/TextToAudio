@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // **6. Update Display Values for Advanced Settings**
     speakingRateInput.addEventListener('input', () => {
-        speakingRateValue.textContent = speakingRateInput.value;
+        speakingRateValue.textContent = speakingRateInput.value + 'x';
         console.log("Speaking rate changed to:", speakingRateInput.value);
     });
 
@@ -825,30 +825,43 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             xhr.onload = function() {
                 if (xhr.status === 401 || xhr.status === 403) {
                     localStorage.removeItem('tts_api_key');
-                    resultDiv.innerHTML = '<p class="text-danger">Invalid API key. Please reload and enter a valid key.</p>';
+                    resultDiv.innerHTML = '<p class="error-message">Invalid API key. Please reload and enter a valid key.</p>';
                     progressContainer.style.display = 'none';
                     return;
                 }
                 if (xhr.status === 200) {
                     const result = JSON.parse(xhr.responseText);
                     if (result.success) {
-                        resultDiv.innerHTML = `<a href="${result.file}" download="${result.fileName}" class="btn btn-success">Download Audio: ${result.fileName}</a>`;
+                        resultDiv.innerHTML = `<a href="${result.file}" download="${result.fileName}" class="download-btn"><i class="fas fa-download"></i> Download: ${result.fileName}</a>`;
                         console.log("Audio generated:", result.fileName);
+
+                        // Show output card and load audio
+                        const outputCard = document.getElementById('outputCard');
+                        if (outputCard) {
+                            outputCard.classList.add('show');
+                        }
 
                         // Also load the generated audio into the main audio player
                         loadAudioIntoPlayer(result.file, result.fileName);
+
+                        // Refresh usage stats
+                        fetchUsageStats();
                     } else {
-                        resultDiv.innerHTML = `<p class="text-danger">Error: ${result.error}</p>`;
+                        resultDiv.innerHTML = `<p class="error-message">Error: ${result.error}</p>`;
                         console.log("Error generating audio:", result.error);
                     }
                 } else {
                     const result = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-                    resultDiv.innerHTML = `<p class="text-danger">Error: ${result.error || 'Error generating audio. Please try again.'}</p>`;
+                    resultDiv.innerHTML = `<p class="error-message">Error: ${result.error || 'Error generating audio. Please try again.'}</p>`;
                     console.log("Error generating audio. Status:", xhr.status);
+                    // Show output card for error display
+                    const outputCard = document.getElementById('outputCard');
+                    if (outputCard) {
+                        outputCard.classList.add('show');
+                    }
                 }
                 // Hide Progress Bar after completion
                 progressBar.style.width = '100%';
-                progressBar.setAttribute('aria-valuenow', 100);
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
                     console.log("Progress bar hidden.");
@@ -951,7 +964,7 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
 
     // **10. Fetch and Display Usage Statistics**
     async function fetchUsageStats() {
-        console.log("Fetching usage statistics for dashboard...");
+        console.log("Fetching usage statistics...");
         try {
             const response = await fetch('/dashboard', {
                 headers: getAuthHeaders()
@@ -967,9 +980,66 @@ Note: Select text before clicking toolbar buttons to wrap existing text.`);
             const data = await response.json();
             console.log("Received usage data:", data);
             displayUsageStats(data.quota);
+            updateUsageIndicator(data.quota);
         } catch (error) {
             console.error('Error fetching usage statistics:', error);
-            dashboardDiv.innerHTML = '<p class="text-danger">Error loading usage statistics.</p>';
+        }
+    }
+
+    // **10.1 Update Header Usage Indicator**
+    function updateUsageIndicator(quota) {
+        const usageBarFill = document.getElementById('usageBarFill');
+        const usageText = document.getElementById('usageText');
+        const usageTooltipContent = document.getElementById('usageTooltipContent');
+
+        if (!usageBarFill || !usageText) return;
+
+        // Calculate total usage percentage across all voice types
+        let totalUsage = 0;
+        let totalLimit = 0;
+        const currentMonth = getCurrentYearMonth();
+        const voiceTypeUsage = {};
+
+        // Get current month data
+        const monthData = quota[currentMonth] || {};
+
+        for (const [voiceType, limit] of Object.entries(FREE_TIER_LIMITS)) {
+            const usage = monthData[voiceType] || 0;
+            totalUsage += usage;
+            totalLimit += limit;
+            voiceTypeUsage[voiceType] = { usage, limit };
+        }
+
+        const overallPercentage = totalLimit > 0 ? Math.min((totalUsage / totalLimit) * 100, 100) : 0;
+
+        // Update the bar
+        usageBarFill.style.width = overallPercentage + '%';
+        usageText.textContent = Math.round(overallPercentage) + '%';
+
+        // Update bar color based on usage
+        usageBarFill.classList.remove('warning', 'danger');
+        if (overallPercentage >= 90) {
+            usageBarFill.classList.add('danger');
+        } else if (overallPercentage >= 70) {
+            usageBarFill.classList.add('warning');
+        }
+
+        // Update tooltip content
+        if (usageTooltipContent) {
+            let tooltipHtml = '';
+            for (const [voiceType, data] of Object.entries(voiceTypeUsage)) {
+                if (data.usage > 0) {
+                    const pct = Math.round((data.usage / data.limit) * 100);
+                    tooltipHtml += `<div class="usage-tooltip-item">
+                        <span>${voiceType}</span>
+                        <span>${pct}%</span>
+                    </div>`;
+                }
+            }
+            if (!tooltipHtml) {
+                tooltipHtml = '<div class="usage-tooltip-item"><span>No usage this month</span></div>';
+            }
+            usageTooltipContent.innerHTML = tooltipHtml;
         }
     }
 
