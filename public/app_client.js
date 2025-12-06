@@ -67,6 +67,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const strippedCharCountDiv = document.getElementById('strippedCharCount');
     const cleanCharCountSpan = document.getElementById('cleanCharCount');
 
+    // Audio Player Section Elements
+    const audioDropZone = document.getElementById('audioDropZone');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const mainAudioPlayer = document.getElementById('mainAudioPlayer');
+    const audioFileInfo = document.getElementById('audioFileInfo');
+    const audioFileNameSpan = document.getElementById('audioFileName');
+
     // **1. Initialize Chart Variables**
     let usageChart;
     let voiceTypeChart;
@@ -199,6 +206,79 @@ document.addEventListener('DOMContentLoaded', function() {
             textFileInput.files = e.dataTransfer.files;
             const event = new Event('change');
             textFileInput.dispatchEvent(event);
+        }
+    });
+
+    // **5.5. Audio Player Drag-and-Drop and Upload Functionality**
+
+    // Track current main audio URL for cleanup
+    let currentMainAudioUrl = null;
+
+    // Function to load audio into the main player
+    function loadAudioIntoPlayer(audioSource, fileName) {
+        // Clean up previous audio URL if it was a blob URL
+        if (currentMainAudioUrl && currentMainAudioUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(currentMainAudioUrl);
+        }
+
+        // Set the audio source
+        if (audioSource instanceof Blob) {
+            currentMainAudioUrl = URL.createObjectURL(audioSource);
+            mainAudioPlayer.src = currentMainAudioUrl;
+        } else {
+            // It's a URL string
+            currentMainAudioUrl = audioSource;
+            mainAudioPlayer.src = audioSource;
+        }
+
+        // Update UI
+        audioFileNameSpan.textContent = fileName || 'Audio loaded';
+        audioFileInfo.style.display = 'block';
+        mainAudioPlayer.style.display = 'block';
+
+        console.log("Audio loaded into player:", fileName);
+    }
+
+    // Click to open file dialog
+    audioDropZone.addEventListener('click', () => {
+        console.log("Audio drop zone clicked. Opening file dialog.");
+        audioFileInput.click();
+    });
+
+    // Handle file selection
+    audioFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            console.log("Audio file selected:", file.name);
+            loadAudioIntoPlayer(file, file.name);
+        }
+    });
+
+    // Drag over
+    audioDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        audioDropZone.classList.add('dragover');
+    });
+
+    // Drag leave
+    audioDropZone.addEventListener('dragleave', () => {
+        audioDropZone.classList.remove('dragover');
+    });
+
+    // Drop
+    audioDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        audioDropZone.classList.remove('dragover');
+        console.log("Audio file dropped.");
+
+        if (e.dataTransfer.files.length) {
+            const file = e.dataTransfer.files[0];
+            // Check if it's an audio file
+            if (file.type.startsWith('audio/')) {
+                loadAudioIntoPlayer(file, file.name);
+            } else {
+                alert('Please drop an audio file (MP3, WAV, OGG, M4A).');
+            }
         }
     });
 
@@ -344,6 +424,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (result.success) {
                         resultDiv.innerHTML = `<a href="${result.file}" download="${result.fileName}" class="btn btn-success">Download Audio: ${result.fileName}</a>`;
                         console.log("Audio generated:", result.fileName);
+
+                        // Also load the generated audio into the main audio player
+                        loadAudioIntoPlayer(result.file, result.fileName);
                     } else {
                         resultDiv.innerHTML = `<p class="text-danger">Error: ${result.error}</p>`;
                         console.log("Error generating audio:", result.error);
