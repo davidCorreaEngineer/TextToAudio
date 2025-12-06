@@ -242,10 +242,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Debug event listeners for audio player
     mainAudioPlayer.addEventListener('play', () => {
         console.log("Audio player: play event");
+        console.log("  currentTime:", mainAudioPlayer.currentTime);
+        console.log("  paused:", mainAudioPlayer.paused);
+        console.log("  muted:", mainAudioPlayer.muted);
+        console.log("  volume:", mainAudioPlayer.volume);
     });
 
     mainAudioPlayer.addEventListener('pause', () => {
         console.log("Audio player: pause event");
+        console.log("  currentTime:", mainAudioPlayer.currentTime);
+        console.log("  Stack trace:", new Error().stack);
     });
 
     mainAudioPlayer.addEventListener('ended', () => {
