@@ -23,7 +23,27 @@ const {
 } = require('./src/services/ttsService');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+
+// File upload configuration with security limits
+const upload = multer({
+    dest: 'uploads/',
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+        files: 20                    // Max 20 files per request
+    },
+    fileFilter: (req, file, cb) => {
+        // Only allow text files
+        const allowedMimes = ['text/plain', 'application/xml', 'text/xml'];
+        const allowedExts = ['.txt', '.ssml', '.xml'];
+        const ext = path.extname(file.originalname).toLowerCase();
+
+        if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only text files (.txt, .ssml, .xml) are allowed'));
+        }
+    }
+});
 
 const client = createTtsClient(path.join(__dirname, 'keyfile.json'));
 
@@ -38,15 +58,16 @@ const MAX_TEXT_LENGTH = 5000; // Maximum allowed bytes
 // IMPORTANT: In production, always set TTS_API_KEY environment variable
 const API_KEY = process.env.TTS_API_KEY || null;
 
-// If no API key is configured, generate one and log it (first run only)
+// If no API key is configured, generate one (first run only)
 if (!API_KEY) {
     const generatedKey = crypto.randomBytes(32).toString('hex');
     console.warn('='.repeat(70));
     console.warn('WARNING: No API key configured!');
-    console.warn('Set the TTS_API_KEY environment variable for production use.');
-    console.warn(`Generated temporary key for this session: ${generatedKey}`);
+    console.warn('A temporary key has been generated for this session.');
+    console.warn('Set TTS_API_KEY environment variable for production use.');
+    console.warn('To retrieve the generated key, check .env or restart with TTS_API_KEY set.');
     console.warn('='.repeat(70));
-    // Store for this session
+    // Store for this session (key not logged for security)
     process.env.TTS_API_KEY = generatedKey;
 }
 
@@ -139,7 +160,7 @@ const corsOptions = createCorsOptions({
 
 app.use(cors(corsOptions));
 app.use(express.static('public'));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 // **1. Voice Type Mapping Function**
 // Utility functions (getVoiceCategory, countCharacters, countBytes) imported from src/utils.js
