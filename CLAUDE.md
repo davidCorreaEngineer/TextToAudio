@@ -1,42 +1,88 @@
 # CLAUDE.md
 
-## I. IDENTITY
+## I. PROJECT CONTEXT
 
-You are a **Senior Software Engineer, Quality Auditor, and TDD Enforcer**.
+### What This Is
+- **Project**: TextToAudio - Web application for text-to-speech conversion
+- **Tech Stack**: Node.js, Express, Google Cloud Text-to-Speech API, vanilla JS frontend
+- **Architecture**: Modular monolith with extracted middleware, services, and utilities
 
-**Prime Directive**: Minimize errors. Eliminate over-engineering. Keep human cognitive load at absolute minimum.
+### Key Files
+```
+app_server.js             # Entry point (Express server)
+src/
+├── utils.js              # Shared utilities (100% tested)
+├── middleware/
+│   ├── auth.js           # Authentication middleware
+│   ├── rateLimit.js      # Rate limiting
+│   ├── cors.js           # CORS configuration
+│   └── errorHandler.js   # Error handling (98.5% tested)
+└── services/
+    └── ttsService.js     # Google Cloud TTS integration
+public/
+├── index.html            # Frontend UI
+└── app_client.js         # Client-side logic
+```
 
-**Communication Style**: BE EXTREMELY CONCISE. No preambles. No excessive summaries. Direct answers only.
+### Verification Commands (CRITICAL)
+```bash
+# Run these to verify changes work
+npm test                    # Unit + integration tests
+npm run test:coverage       # Coverage report
+npm run test:unit           # Unit tests only
+npm run test:integration    # API endpoint tests
+npm run test:security       # Auth, rate limiting, error sanitization
+npm run test:e2e            # Full workflow verification
+
+# Single test for speed during iteration
+npm test -- --grep "TestName"
+```
+
+> **Why this matters**: Claude with verification commands produces 2-3x better results. Always run tests after changes.
 
 ---
 
-## II. WORKFLOW GOVERNANCE
+## II. WORKFLOW
 
-### Planning (Mandatory)
-
-```
-IF task modifies >3 files OR adds new feature:
-  1. Enter plan mode (Shift+Tab ×2) or use /plan
-  2. Present detailed plan with affected files
-  3. WAIT for explicit approval before proceeding
-  
-IF task is complex debugging or root cause analysis:
-  → Request step-by-step reasoning before proposing solutions
-```
-
-### Task Execution
-
-- **50 lines max** per implementation increment
-- Implement → Test → Verify → Commit (atomic cycles)
-- If it feels complex, break it down further
-
-### Uncertainty Protocol
+### The Pattern: Explore → Plan → Execute → Verify
 
 ```
-If not 100% certain about any claim or change:
-→ State "I'm not certain about [X]" BEFORE that assertion
-→ Then: search docs, or ask for clarification
+1. EXPLORE: Read relevant files first. Say "do NOT code yet" for complex tasks.
+2. PLAN: Shift+Tab ×2 for plan mode. Iterate until plan is solid.
+3. EXECUTE: Implement in small increments (≤50 lines). Auto-accept when plan is good.
+4. VERIFY: Run tests/build after EVERY change. Fix failures before moving on.
 ```
+
+### Planning Triggers
+
+```
+REQUIRE plan mode when:
+  - Task modifies >3 files
+  - Adding new feature
+  - Complex debugging / root cause analysis
+  - Architectural changes
+
+In plan mode:
+  - List affected files
+  - Identify edge cases upfront
+  - Ask: "What questions can I answer to clarify this further?"
+  - WAIT for explicit approval
+```
+
+### Thinking Triggers (Use Deliberately)
+
+| Trigger | When to Use |
+|---------|-------------|
+| `think` | Standard reasoning, simple refactors |
+| `think hard` | Multi-file changes, subtle bugs |
+| `think harder` | Architectural decisions, complex debugging |
+| `ultrathink` | Security issues, performance optimization, critical paths |
+
+### Context Management
+
+- **Between tasks**: `/clear` to reset working memory
+- **Resume work**: `/resume` to continue previous session
+- **Long sessions**: Watch for context degradation; `/compact` if needed
 
 ---
 
@@ -50,32 +96,43 @@ For ANY new feature or bug fix:
 2. Include: edge cases, null inputs, error conditions
 3. Implement minimum code to pass
 4. Refactor while green
+5. Run full test suite before commit
 ```
 
-**Legacy Code Exception**: Untested legacy files get pragmatic handling:
+**Legacy Code Exception**:
 - Document testing debt in commit message
 - Add tests when touching code for bug fixes
 - New features MUST have tests from day 1
 
-### Mandatory Self-Review
+### Self-Review Checklist
 
-Before marking ANY task complete, run this mental checklist:
+Before marking ANY task complete:
 
 ```
+□ Tests pass? (run them, don't assume)
 □ Null/empty input handling?
 □ Edge cases covered?
 □ Resource leaks (streams, connections)?
 □ Thread safety (if concurrent)?
-□ Performance under load?
+□ Security implications reviewed?
 ```
 
-> This practice catches ~40% of issues before human review.
+### End-of-Session Verification
+
+Before ending any session, run:
+```
+"Review all changes made this session. Verify:
+1. Tests pass
+2. No security vulnerabilities introduced
+3. Code follows project conventions
+4. No debugging artifacts left behind"
+```
 
 ---
 
 ## IV. CODE STANDARDS
 
-### Naming
+### Naming (Non-Negotiable)
 
 ```
 ❌ NEVER: int t; void proc(); UserMgr mgr;
@@ -86,14 +143,18 @@ Before marking ANY task complete, run this mental checklist:
 
 - **NO** abstractions unless explicitly requested
 - **NO** utility functions "for future use"
+- **NO** premature optimization
 - The simplest solution that works IS the correct solution
 
-### External References
+### When Uncertain
 
-Do NOT embed extensive style guides here. Reference external files:
-- Code style → `code_style.md`
-- Test patterns → `testing_patterns.md`
-- API docs → `docs/api_schemas.md` (project-specific)
+```
+If not 100% certain about any claim or change:
+1. State "I'm not certain about [X]" BEFORE that assertion
+2. Search docs or codebase for evidence
+3. Ask for clarification if still unclear
+4. NEVER guess on security-related code
+```
 
 ---
 
@@ -109,31 +170,48 @@ Types: feat | fix | refactor | test | docs | chore
 Examples:
   feat(auth): add jwt validation
   fix(api): handle null response body
+  test(utils): add edge case coverage
 ```
 
-### Branch Safety
+### Branch Strategy (Solo)
 
 ```
-⛔ NEVER push directly to main/master
-✅ ALWAYS create feature branch + Pull Request
+✅ Review `git diff` before every push to main
+✅ Complex features: branch + self-review after 24hr
+✅ Hotfixes: commit to main with clear explanation
+⛔ Never push broken/untested code to main
 ```
 
-### Session End
+### Session End Protocol
 
 ```
-Before ending session:
-1. Commit all meaningful changes
-2. Document: done / pending / blockers (in commit message or project notes)
-3. Push to remote
+1. Run full test suite
+2. Commit all meaningful changes
+3. Document in commit: done / pending / blockers
+4. Push to remote
+5. Note any TODO items for next session
 ```
 
 ---
 
-## VI. CONTEXT MANAGEMENT
+## VI. SLASH COMMANDS
 
-- **Between tasks**: Use `/clear` to reset working memory
-- **For audits**: Delegate to subagent or new session to isolate context
-- **Rewind/Clear**: Use git to manage code state (Claude Code doesn't auto-revert)
+### Available (Create in .claude/commands/)
+
+| Command | Purpose |
+|---------|---------|
+| `/commit` | Stage, commit with conventional message, push |
+| `/review` | Self-review current branch changes |
+| `/test` | Run relevant tests for changed files |
+| `/verify` | Full verification: lint + test + build |
+
+### Creating New Commands
+
+When you do something 3+ times, make it a command:
+```bash
+mkdir -p .claude/commands
+# Create markdown file with embedded bash via backticks
+```
 
 ---
 
@@ -143,75 +221,71 @@ Before ending session:
 
 ```
 If a rule cannot be followed:
-1. State which rule is being violated and why
-2. Document decision in commit message
-3. Add TODO to address technical debt if applicable
+1. State which rule and why
+2. Document in commit message
+3. Add TODO for technical debt
 
 Examples:
 - "fix(urgent): patch XSS - tests deferred to PR #123"
-- "feat(mvp): inline logic for demo - extract to service layer next sprint"
-- "refactor: touches 15 files - approved in planning, atomic commit"
+- "feat(mvp): inline logic for demo - refactor next sprint"
 ```
 
-### Solo Project Adjustments
+### Velocity vs. Quality Tradeoffs
 
 ```
-Branch Strategy for Solo Development:
-✅ Review git diff before every push to main
-✅ For complex features: Create branch + self-review after 24hr
-✅ For hotfixes: Commit to main with clear explanation
-⛔ Never push broken/untested code to main
+PROTOTYPE/SPIKE: Skip tests, document as throwaway
+MVP: Core paths tested, edge cases documented as TODO
+PRODUCTION: Full test coverage, no exceptions
 ```
 
 ---
 
-## VIII. META-RULES
+## VIII. LEARNED PATTERNS
 
-### Document Constraints
-
-- Keep this file **<300 lines**
-- Use `@file_path` references over copying text blocks
-- Every rule must be universally applicable
-
-### Learning Protocol
-
-```
-When an error is corrected:
-1. Reflect: What caused it?
-2. Abstract: What general principle was violated?
-3. Document: Add to "Learned Patterns" below
-
-Format: AVOID [anti-pattern] → PREFER [correct pattern]
-```
-
-### Learned Patterns
+> Add patterns here when errors are corrected. Format: AVOID → PREFER → REASON
 
 **AVOID**: Testing by extracting/copying functions into test files
-**PREFER**: Extract utilities to separate modules (`src/utils.js`), import and test
-**REASON**: Enables real coverage metrics, enforces single source of truth, catches import/export bugs
+**PREFER**: Extract utilities to separate modules, import and test
+**REASON**: Real coverage metrics, single source of truth, catches import bugs
 
-**AVOID**: Setting coverage thresholds without refactoring monolithic files first
-**PREFER**: Refactor → Test → Set threshold, or set threshold on specific modules only
-**REASON**: 0% coverage on 5000-line monoliths is demotivating and provides no value
+**AVOID**: Setting coverage thresholds on untested monoliths
+**PREFER**: Refactor → Test → Set threshold (or per-module thresholds)
+**REASON**: 0% on 5000-line files is demotivating, provides no value
 
-### Document Status
+**AVOID**: Long implementation runs without verification
+**PREFER**: Implement small chunk → run tests → iterate
+**REASON**: Errors compound; early detection saves time
 
-External references:
-- [x] `code_style.md` ✓
-- [ ] `docs/api_schemas.md` (project-specific, not yet created)
-- [x] `testing_patterns.md` ✓
-
-Test coverage status:
-- [x] Unit tests: 243 passing (utils, middleware, serverUtils, clientUtils)
-- [x] Integration tests: API endpoints tested
-- [x] Security tests: Auth, rate limiting, error sanitization
-- [x] E2E tests: Full workflow tests
-- **Test Suites**: 7 suites, all passing
-- **Coverage**: 99% overall (exceeds 65% threshold)
-  - src/utils.js: 100%
-  - src/middleware/: 98.5%
-- **Refactored**: Utilities and middleware extracted to modular architecture
+**AVOID**: Vague plans like "improve the code"
+**PREFER**: Specific scope: "Extract DB logic from UserService to repository class"
+**REASON**: Clear objectives produce verifiable results
 
 ---
 
-*Concise. Testable. Irrefutable.*
+## IX. META
+
+### Document Rules
+- Keep under 300 lines
+- Every rule must be universally applicable to this project
+- Update "Learned Patterns" when errors are corrected
+
+### When to Update This File
+- After recurring mistakes (add to Learned Patterns)
+- When verification commands change
+- When team conventions evolve
+- After PR feedback reveals gaps
+
+---
+
+## X. CURRENT STATUS
+
+**Test Coverage**: 99% overall
+- src/utils.js: 100%
+- src/middleware/: 98.5%
+- 7 test suites, 243 tests passing
+
+**Architecture**: Modular (utilities and middleware extracted)
+
+---
+
+*Verify everything. Document learnings. Ship with confidence.*
