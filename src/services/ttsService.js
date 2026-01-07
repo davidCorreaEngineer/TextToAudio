@@ -6,6 +6,51 @@ const path = require('path');
  * Handles all text-to-speech business logic independently of HTTP layer
  */
 
+// Configuration
+const API_TIMEOUT_MS = 30000; // 30 second timeout
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
+
+/**
+ * Wraps a promise with a timeout
+ * @param {Promise} promise - The promise to wrap
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} operation - Operation name for error message
+ * @returns {Promise} Promise that rejects on timeout
+ */
+function withTimeout(promise, timeoutMs, operation = 'Operation') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+        )
+    ]);
+}
+
+/**
+ * Checks if an error is retryable (quota/rate limit errors)
+ * @param {Error} error - The error to check
+ * @returns {boolean} Whether the error is retryable
+ */
+function isRetryableError(error) {
+    const message = error.message || '';
+    const code = error.code;
+    // Retry on 429 (quota exceeded), 503 (service unavailable), or RESOURCE_EXHAUSTED
+    return code === 429 || code === 503 || code === 8 ||
+           message.includes('RESOURCE_EXHAUSTED') ||
+           message.includes('Quota exceeded') ||
+           message.includes('rate limit');
+}
+
+/**
+ * Delays execution for specified milliseconds
+ * @param {number} ms - Milliseconds to delay
+ * @returns {Promise} Promise that resolves after delay
+ */
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * Creates a Google Cloud TTS client
  * @param {string} keyfilePath - Path to Google Cloud credentials
@@ -44,24 +89,54 @@ function buildSynthesisRequest({ text, languageCode, voiceName, speakingRate = 1
 
 /**
  * Generates speech from text using Google Cloud TTS
+ * Includes timeout and retry logic for resilience
  * @param {textToSpeech.TextToSpeechClient} client - TTS client
  * @param {Object} params - Synthesis parameters
  * @returns {Promise<Buffer>} Audio content as Buffer
  */
 async function generateSpeech(client, params) {
     const request = buildSynthesisRequest(params);
-    const [response] = await client.synthesizeSpeech(request);
-    return response.audioContent;
+    let lastError;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const [response] = await withTimeout(
+                client.synthesizeSpeech(request),
+                API_TIMEOUT_MS,
+                'Speech synthesis'
+            );
+            return response.audioContent;
+        } catch (error) {
+            lastError = error;
+
+            // Don't retry on non-retryable errors or last attempt
+            if (!isRetryableError(error) || attempt === MAX_RETRIES) {
+                throw error;
+            }
+
+            // Wait before retrying
+            const delayMs = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+            console.log(`GCP API error (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${error.message}. Retrying in ${delayMs}ms...`);
+            await delay(delayMs);
+        }
+    }
+
+    throw lastError;
 }
 
 /**
  * Lists available voices from Google Cloud TTS
+ * Includes timeout for resilience
  * @param {textToSpeech.TextToSpeechClient} client - TTS client
  * @param {string[]} languageCodes - Optional language codes filter
  * @returns {Promise<Array>} Array of voice objects
  */
 async function listVoices(client, languageCodes = null) {
-    const [result] = await client.listVoices({});
+    const [result] = await withTimeout(
+        client.listVoices({}),
+        API_TIMEOUT_MS,
+        'List voices'
+    );
 
     if (!languageCodes || languageCodes.length === 0) {
         return result.voices;

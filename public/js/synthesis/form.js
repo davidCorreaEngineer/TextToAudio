@@ -130,6 +130,7 @@ export function initFormSubmission() {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/synthesize', true);
             xhr.setRequestHeader('X-API-Key', getApiKey());
+            xhr.timeout = 60000; // 60 second timeout
 
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable && progressBar) {
@@ -233,6 +234,17 @@ export function initFormSubmission() {
                 showToast('error', 'Network Error', 'Failed to connect to server.');
             };
 
+            xhr.ontimeout = function() {
+                setButtonLoading(submitBtn, false);
+                if (resultDiv) {
+                    resultDiv.innerHTML = '<p class="text-danger">Request timed out. Please try again.</p>';
+                }
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+                showToast('error', 'Timeout', 'Request timed out. Try with shorter text.');
+            };
+
             xhr.send(formData);
         } catch (error) {
             console.error('Error:', error);
@@ -288,6 +300,7 @@ async function handleBatchProcessing(files) {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/synthesize-batch', true);
         xhr.setRequestHeader('X-API-Key', getApiKey());
+        xhr.timeout = 300000; // 5 minute timeout for batch
 
         xhr.upload.onprogress = function(event) {
             if (event.lengthComputable && progressBar) {
@@ -374,6 +387,15 @@ async function handleBatchProcessing(files) {
         xhr.onerror = function() {
             console.error('Network error during batch processing');
             showToast('error', 'Network Error', 'Failed to connect to server');
+            setButtonLoading(submitBtn, false);
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+            }
+        };
+
+        xhr.ontimeout = function() {
+            console.error('Batch processing timed out');
+            showToast('error', 'Timeout', 'Batch processing timed out. Try with fewer files.');
             setButtonLoading(submitBtn, false);
             if (progressContainer) {
                 progressContainer.style.display = 'none';

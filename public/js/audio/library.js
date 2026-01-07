@@ -18,6 +18,9 @@ try {
     audioItems = [];
 }
 
+// Track WaveSurfer instances to prevent memory leaks
+const waveSurferInstances = new Map();
+
 function saveLibrary() {
     localStorage.setItem('audioLibrary', JSON.stringify(audioItems));
     updateLibraryCount();
@@ -62,6 +65,16 @@ export function toggleFavorite(id) {
 export function renderLibrary() {
     const audioLibrary = document.getElementById('audioLibrary');
     if (!audioLibrary) return;
+
+    // Destroy existing WaveSurfer instances to prevent memory leaks
+    waveSurferInstances.forEach((ws, id) => {
+        try {
+            ws.destroy();
+        } catch (e) {
+            console.warn(`Failed to destroy WaveSurfer instance ${id}:`, e);
+        }
+    });
+    waveSurferInstances.clear();
 
     if (audioItems.length === 0) {
         audioLibrary.innerHTML = `
@@ -120,6 +133,8 @@ export function renderLibrary() {
                     interact: false
                 });
                 ws.load(item.audioUrl);
+                // Track this instance for cleanup
+                waveSurferInstances.set(item.id, ws);
             }
         });
     }, 100);
