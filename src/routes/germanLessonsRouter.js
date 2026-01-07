@@ -75,17 +75,24 @@ function createGermanLessonsRouter({ lessonsPath, authMiddleware }) {
         try {
             const filename = req.params.filename;
 
-            // Security: prevent directory traversal
-            if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            // Security: Strict filename validation using allowlist approach
+            // Only allow: alphanumeric, underscore, hyphen, followed by .txt
+            const SAFE_FILENAME_PATTERN = /^[a-zA-Z0-9_-]+\.txt$/;
+
+            if (!SAFE_FILENAME_PATTERN.test(filename)) {
                 return res.status(400).json({ success: false, error: 'Invalid filename' });
             }
 
-            // Only allow .txt files
-            if (!filename.endsWith('.txt')) {
-                return res.status(400).json({ success: false, error: 'Only .txt files are allowed' });
+            // Defense-in-depth: Verify resolved path stays within lessons directory
+            const resolvedPath = path.resolve(lessonsPath, filename);
+            const normalizedLessonsPath = path.resolve(lessonsPath);
+
+            if (!resolvedPath.startsWith(normalizedLessonsPath + path.sep)) {
+                console.warn(`Path traversal attempt detected: ${filename}`);
+                return res.status(400).json({ success: false, error: 'Invalid filename' });
             }
 
-            const filePath = path.join(lessonsPath, filename);
+            const filePath = resolvedPath;
             const content = await fs.readFile(filePath, 'utf8');
 
             console.log(`Loaded German lesson: ${filename} (${content.length} characters)`);

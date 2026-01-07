@@ -290,6 +290,58 @@ describe('Quota Service', () => {
             // Should have been called 3 times
             expect(fs.writeFile).toHaveBeenCalledTimes(3);
         });
+
+        // Security: Mutex deadlock prevention tests
+        describe('mutex deadlock prevention', () => {
+            it('should not deadlock when fs.writeFile throws', async () => {
+                fs.readFile.mockResolvedValue('{}');
+                fs.writeFile.mockRejectedValueOnce(new Error('Disk full'));
+
+                // First call should fail but not deadlock
+                await expect(updateQuota('Standard', 100, testQuotaFile))
+                    .rejects.toThrow('Disk full');
+
+                // Second call should still work (not deadlocked)
+                fs.writeFile.mockResolvedValueOnce();
+
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Deadlock detected')), 1000)
+                );
+
+                await expect(Promise.race([
+                    updateQuota('Standard', 100, testQuotaFile),
+                    timeoutPromise
+                ])).resolves.toBeUndefined();
+            });
+
+            it('should not deadlock when JSON.parse throws on corrupted data', async () => {
+                fs.readFile.mockResolvedValueOnce('invalid json {{{');
+                fs.writeFile.mockResolvedValue();
+
+                // Should handle gracefully (starts fresh), not deadlock
+                await updateQuota('Standard', 100, testQuotaFile);
+
+                // Second call should work
+                fs.readFile.mockResolvedValueOnce('{}');
+
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Deadlock detected')), 1000)
+                );
+
+                await expect(Promise.race([
+                    updateQuota('Standard', 100, testQuotaFile),
+                    timeoutPromise
+                ])).resolves.toBeUndefined();
+            });
+
+            it('should propagate writeFile errors to caller', async () => {
+                fs.readFile.mockResolvedValue('{}');
+                fs.writeFile.mockRejectedValue(new Error('Permission denied'));
+
+                await expect(updateQuota('Standard', 100, testQuotaFile))
+                    .rejects.toThrow('Permission denied');
+            });
+        });
     });
 
     describe('getQuotaData', () => {

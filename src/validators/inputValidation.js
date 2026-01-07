@@ -36,7 +36,10 @@ const DANGEROUS_PATTERNS = [
     /on\w+\s*=/i,  // onclick, onerror, etc.
     /<iframe/i,
     /<object/i,
-    /<embed/i
+    /<embed/i,
+    /<!\[CDATA\[/i,    // CDATA sections (could hide malicious content)
+    /<!ENTITY/i,       // Entity declarations (XXE attacks)
+    /<!DOCTYPE/i,      // DOCTYPE declarations (could reference external DTD)
 ];
 
 /**
@@ -110,12 +113,33 @@ function validateSsml(text) {
         }
     }
 
-    // If text looks like SSML, do basic structure check
-    if (text.includes('<speak>') || text.includes('</speak>')) {
-        // Check for balanced speak tags
-        const speakOpen = (text.match(/<speak>/g) || []).length;
-        const speakClose = (text.match(/<\/speak>/g) || []).length;
-        if (speakOpen !== speakClose) {
+    // If text looks like SSML, do structure validation
+    // Check for speak tags (case-insensitive detection for validation purposes)
+    const hasOpenSpeak = /<speak\b/i.test(text);
+    const hasCloseSpeak = /<\/speak>/i.test(text);
+
+    if (hasOpenSpeak || hasCloseSpeak) {
+        // SSML spec requires lowercase <speak> tags - reject incorrect casing
+        const hasUppercaseOpen = /<SPEAK\b/.test(text) || /<Speak\b/.test(text);
+        const hasUppercaseClose = /<\/SPEAK>/.test(text) || /<\/Speak>/.test(text);
+
+        if (hasUppercaseOpen || hasUppercaseClose) {
+            return { valid: false, error: 'Invalid SSML: speak tags must be lowercase' };
+        }
+
+        // Balanced tag check (with attribute support)
+        const speakOpenMatches = text.match(/<speak\b[^>]*>/g) || [];
+        const speakCloseMatches = text.match(/<\/speak>/g) || [];
+
+        // Verify proper nesting: first opening tag should appear before first closing tag
+        const firstOpenIndex = text.search(/<speak\b/);
+        const firstCloseIndex = text.search(/<\/speak>/);
+
+        if (firstCloseIndex !== -1 && (firstOpenIndex === -1 || firstCloseIndex < firstOpenIndex)) {
+            return { valid: false, error: 'Invalid SSML structure: closing tag before opening tag' };
+        }
+
+        if (speakOpenMatches.length !== speakCloseMatches.length) {
             return { valid: false, error: 'Unbalanced <speak> tags in SSML' };
         }
     }

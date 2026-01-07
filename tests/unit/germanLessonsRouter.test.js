@@ -166,7 +166,7 @@ describe('German Lessons Router', () => {
                 .expect(400);
 
             expect(response.body.success).toBe(false);
-            expect(response.body.error).toBe('Only .txt files are allowed');
+            expect(response.body.error).toBe('Invalid filename');
         });
 
         it('should return 404 when file not found', async () => {
@@ -190,6 +190,84 @@ describe('German Lessons Router', () => {
                 .expect(500);
 
             expect(response.body.success).toBe(false);
+        });
+
+        // Security: Directory traversal bypass prevention tests
+        describe('directory traversal bypass prevention', () => {
+            it('should reject filenames with special characters (defense against injection)', async () => {
+                // Note: URL-level null bytes get handled by Express/Node URL parsing
+                // We test that our allowlist pattern blocks any unexpected characters
+                const maliciousNames = [
+                    'file\x00.txt',     // null byte (if not stripped by URL layer)
+                    'file\n.txt',       // newline
+                    'file\r.txt',       // carriage return
+                ];
+
+                for (const name of maliciousNames) {
+                    const response = await request(app)
+                        .get(`/german-lessons/${encodeURIComponent(name)}`);
+
+                    // Should either be 400 (invalid) or 404 (URL layer strips it, file not found)
+                    expect([400, 404]).toContain(response.status);
+                }
+            });
+
+            it('should only allow alphanumeric, underscore, hyphen in filename', async () => {
+                // Test various special characters that might bypass simple checks
+                const invalidNames = [
+                    'file$name.txt',
+                    'file@name.txt',
+                    'file name.txt',  // spaces
+                    'file%name.txt',
+                    'file;name.txt',
+                    'file|name.txt',
+                    'file`name.txt',
+                ];
+
+                for (const name of invalidNames) {
+                    const response = await request(app)
+                        .get(`/german-lessons/${encodeURIComponent(name)}`)
+                        .expect(400);
+
+                    expect(response.body.error).toBe('Invalid filename');
+                }
+            });
+
+            it('should verify resolved path stays within lessons directory', async () => {
+                // Even if a filename passes basic checks, the resolved path must stay within lessonsPath
+                // This is a defense-in-depth measure
+                fs.readFile.mockResolvedValue('content');
+
+                const response = await request(app)
+                    .get('/german-lessons/valid_file.txt')
+                    .expect(200);
+
+                // Verify readFile was called with correct path
+                expect(fs.readFile).toHaveBeenCalledWith(
+                    expect.stringMatching(/^\/test\/lessons\/valid_file\.txt$/),
+                    'utf8'
+                );
+            });
+
+            it('should allow valid filenames with numbers, underscores, hyphens', async () => {
+                fs.readFile.mockResolvedValue('lesson content');
+
+                const validNames = [
+                    '1_stackable.txt',
+                    'lesson-123.txt',
+                    'a2_capstone_stackable.txt',
+                    'My_Lesson_01.txt',
+                ];
+
+                for (const name of validNames) {
+                    fs.readFile.mockClear();
+                    const response = await request(app)
+                        .get(`/german-lessons/${encodeURIComponent(name)}`)
+                        .expect(200);
+
+                    expect(response.body.success).toBe(true);
+                }
+            });
         });
     });
 

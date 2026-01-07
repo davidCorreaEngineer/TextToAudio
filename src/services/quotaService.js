@@ -67,39 +67,44 @@ function calculateQuotaCount(text, voiceName, useSsml = false) {
  * @param {string} quotaFilePath - Path to quota.json file
  */
 async function updateQuota(voiceType, count, quotaFilePath) {
-    // Acquire lock by chaining onto the previous operation
-    const releaseLock = new Promise(resolve => {
-        quotaLock = quotaLock.then(async () => {
-            let quota = {};
+    // Acquire lock using proper async mutex pattern
+    let release;
+    const lockPromise = new Promise(r => { release = r; });
 
-            try {
-                const data = await fs.readFile(quotaFilePath, 'utf8');
-                quota = JSON.parse(data);
-                console.log("Quota data loaded:", quota);
-            } catch (error) {
-                // File doesn't exist or is empty, start with an empty object
-                console.log("Quota file not found or empty. Starting fresh.");
-            }
+    const previousLock = quotaLock;
+    quotaLock = lockPromise;
 
-            const yearMonth = getCurrentYearMonth();
+    await previousLock; // Wait for previous operation
 
-            if (!quota[yearMonth]) {
-                quota[yearMonth] = {};
-            }
+    try {
+        let quota = {};
 
-            if (!quota[yearMonth][voiceType]) {
-                quota[yearMonth][voiceType] = 0;
-            }
+        try {
+            const data = await fs.readFile(quotaFilePath, 'utf8');
+            quota = JSON.parse(data);
+            console.log("Quota data loaded:", quota);
+        } catch (error) {
+            // File doesn't exist or is empty/invalid, start with an empty object
+            console.log("Quota file not found or empty. Starting fresh.");
+        }
 
-            quota[yearMonth][voiceType] += count;
+        const yearMonth = getCurrentYearMonth();
 
-            await fs.writeFile(quotaFilePath, JSON.stringify(quota, null, 2));
-            console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
-            resolve();
-        });
-    });
+        if (!quota[yearMonth]) {
+            quota[yearMonth] = {};
+        }
 
-    await releaseLock;
+        if (!quota[yearMonth][voiceType]) {
+            quota[yearMonth][voiceType] = 0;
+        }
+
+        quota[yearMonth][voiceType] += count;
+
+        await fs.writeFile(quotaFilePath, JSON.stringify(quota, null, 2));
+        console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
+    } finally {
+        release(); // Always release lock, even on error
+    }
 }
 
 /**

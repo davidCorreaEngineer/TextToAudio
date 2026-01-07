@@ -8,6 +8,13 @@ import { updateShadowingVisibility } from '../practice/shadowing.js';
 
 const MAX_TEXT_LENGTH = 5000;
 
+// Security: Escape HTML to prevent XSS in file names
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 export function initFileUploadHandlers() {
     const {
         textFileInput, dropZone, textPreview, fileSizeDiv
@@ -29,7 +36,8 @@ export function initFileUploadHandlers() {
                     let filesList = '';
                     let totalSize = 0;
                     for (let i = 0; i < files.length; i++) {
-                        filesList += `${i + 1}. ${files[i].name} (${files[i].size.toLocaleString()} bytes)<br>`;
+                        // Security: Escape file names to prevent XSS
+                        filesList += `${i + 1}. ${escapeHtml(files[i].name)} (${files[i].size.toLocaleString()} bytes)<br>`;
                         totalSize += files[i].size;
                     }
 

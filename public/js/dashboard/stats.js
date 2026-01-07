@@ -6,6 +6,13 @@ import { fetchDashboard } from '../api.js';
 import { FREE_TIER_LIMITS } from '../config.js';
 import { renderUsageChart, renderVoiceTypeChart, setUsageChartRef, setVoiceTypeChartRef } from './charts.js';
 
+// Security: Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
 export function getCurrentYearMonth() {
     const now = new Date();
     const year = now.getFullYear();
@@ -67,9 +74,10 @@ export function updateUsageIndicator(quota) {
                 const usageStr = formatNumber(data.usage);
                 const limitStr = formatNumber(data.limit);
 
+                // Security: Escape all dynamic values to prevent XSS
                 tooltipHtml += '<div class="usage-tooltip-item">' +
-                    '<span class="voice-name">' + voiceType + '</span>' +
-                    '<span class="voice-usage">' + usageStr + ' / ' + limitStr + ' ' + unit + '</span>' +
+                    '<span class="voice-name">' + escapeHtml(voiceType) + '</span>' +
+                    '<span class="voice-usage">' + escapeHtml(usageStr) + ' / ' + escapeHtml(limitStr) + ' ' + escapeHtml(unit) + '</span>' +
                     '<span class="voice-pct ' + (pct >= 90 ? 'danger' : (pct >= 70 ? 'warning' : '')) + '">' + pct + '%</span>' +
                 '</div>';
             }
@@ -79,7 +87,7 @@ export function updateUsageIndicator(quota) {
             tooltipHtml = '<div class="usage-tooltip-item"><span>No usage this month</span></div>';
         }
 
-        tooltipHtml = '<div class="usage-month">' + currentMonth + '</div>' + tooltipHtml;
+        tooltipHtml = '<div class="usage-month">' + escapeHtml(currentMonth) + '</div>' + tooltipHtml;
         usageTooltipContent.innerHTML = tooltipHtml;
     }
 }
@@ -170,12 +178,13 @@ function displayVoiceTypeConsumption(data) {
 
         const cardDiv = document.createElement('div');
         cardDiv.className = 'summary-card';
+        // Security: Escape dynamic values to prevent XSS
         cardDiv.innerHTML = `
-            <h5><i class="${iconClass}"></i> ${voiceType} Voices</h5>
-            <p>${usage.toLocaleString()} / ${limit.toLocaleString()} ${unit}</p>
+            <h5><i class="${escapeHtml(iconClass)}"></i> ${escapeHtml(voiceType)} Voices</h5>
+            <p>${escapeHtml(usage.toLocaleString())} / ${escapeHtml(limit.toLocaleString())} ${escapeHtml(unit)}</p>
             <div class="progress">
                 <div
-                    class="progress-bar ${progressBarClass}"
+                    class="progress-bar ${escapeHtml(progressBarClass)}"
                     role="progressbar"
                     style="width: ${percentage}%;"
                     aria-valuenow="${percentage}"

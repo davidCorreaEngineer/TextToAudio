@@ -88,6 +88,54 @@ describe('createApiKeyAuthMiddleware', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
+
+  // Security: API Key Null Vulnerability Tests
+  describe('null/undefined API key vulnerability prevention', () => {
+    test('returns 500 when middleware is created with null key', () => {
+      const nullKeyMiddleware = createApiKeyAuthMiddleware(null);
+      req.headers['x-api-key'] = 'null';
+
+      nullKeyMiddleware(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: expect.stringContaining('configuration')
+        })
+      );
+    });
+
+    test('returns 500 when middleware is created with undefined key', () => {
+      const undefinedKeyMiddleware = createApiKeyAuthMiddleware(undefined);
+      req.headers['x-api-key'] = 'anything';
+
+      undefinedKeyMiddleware(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    test('returns 500 when middleware is created with empty string key', () => {
+      const emptyKeyMiddleware = createApiKeyAuthMiddleware('');
+      req.headers['x-api-key'] = '';
+
+      emptyKeyMiddleware(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    test('rejects literal string "null" against valid key', () => {
+      req.headers['x-api-key'] = 'null';
+
+      middleware(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+  });
 });
 
 // =============================================================================

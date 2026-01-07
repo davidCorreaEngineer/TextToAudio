@@ -250,6 +250,56 @@ describe('Input Validation', () => {
 
             expect(result.valid).toBe(false);
         });
+
+        // Security: Enhanced SSML validation tests
+        describe('enhanced SSML security', () => {
+            it('should reject CDATA sections', () => {
+                const result = validateSsml('<speak><![CDATA[<script>evil</script>]]></speak>');
+
+                expect(result.valid).toBe(false);
+                expect(result.error).toBe('Text contains disallowed content');
+            });
+
+            it('should reject entity declarations', () => {
+                const result = validateSsml('<!ENTITY xxe SYSTEM "file:///etc/passwd">');
+
+                expect(result.valid).toBe(false);
+                expect(result.error).toBe('Text contains disallowed content');
+            });
+
+            it('should reject DOCTYPE declarations', () => {
+                const result = validateSsml('<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>');
+
+                expect(result.valid).toBe(false);
+                expect(result.error).toBe('Text contains disallowed content');
+            });
+
+            it('should handle case-mismatched speak tags', () => {
+                const result = validateSsml('<SPEAK>Hello</speak>');
+
+                expect(result.valid).toBe(false);
+                expect(result.error).toContain('tag');
+            });
+
+            it('should reject improperly nested speak tags (close before open)', () => {
+                const result = validateSsml('</speak><speak>Hello</speak>');
+
+                expect(result.valid).toBe(false);
+                expect(result.error).toContain('structure');
+            });
+
+            it('should accept properly nested speak tags', () => {
+                const result = validateSsml('<speak>Hello</speak>');
+
+                expect(result.valid).toBe(true);
+            });
+
+            it('should accept speak with standard attributes', () => {
+                const result = validateSsml('<speak version="1.0" xml:lang="en-US">Hello</speak>');
+
+                expect(result.valid).toBe(true);
+            });
+        });
     });
 
     describe('validateTextContent', () => {
