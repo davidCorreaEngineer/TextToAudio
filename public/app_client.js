@@ -11,6 +11,7 @@ import { initTheme } from './js/ui/theme.js';
 import { initFab, updateDashboard, setAudioItemsRef } from './js/ui/fab.js';
 import { initSettingsEvents } from './js/ui/settings.js';
 import { initInputModeToggle } from './js/ui/modeToggle.js';
+import { initStreakUI, updateStreakIndicator, updateProgressDashboard } from './js/ui/streak.js';
 
 // Audio Modules
 import { initAudioPlayerEvents, initAudioTest } from './js/audio/player.js';
@@ -90,6 +91,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     renderLibrary();
     updateDashboard();
     initLibraryCount();
+
+    // Initialize progress tracking UI
+    initStreakUI();
 
     console.log("Application initialized.");
 });

@@ -9,6 +9,17 @@ import { splitIntoPhrases, compareAnswers } from './phrases.js';
 import { detectSilenceGaps, buildTimingsFromSilence, estimatePhraseTimings } from '../audio/analysis.js';
 import { base64ToBlob } from '../api.js';
 import { showToast } from '../ui/toast.js';
+import {
+    recordSession,
+    recordPhraseAttempt,
+    updateTextMastery,
+    getBulkPhraseMastery
+} from '../services/progressService.js';
+import { updateStreakIndicator, updateProgressDashboard } from '../ui/streak.js';
+
+// Session tracking
+let sessionStartTime = null;
+let currentSourceText = 'Unknown';
 
 function updateDictationProgress() {
     const { dictationCurrentNum, dictationProgressFill, dictationScoreSpan } = dom;
@@ -220,6 +231,9 @@ function checkDictationAnswer() {
         dictationState.totalCorrect++;
     }
 
+    // Record phrase attempt for progress tracking
+    recordPhraseAttempt(correctAnswer, result.score, currentSourceText);
+
     updateDictationProgress();
     showDictationResult(userAnswer, correctAnswer, result);
 }
@@ -276,6 +290,25 @@ function showDictationComplete() {
     if (phrasesCorrectSpan) {
         phrasesCorrectSpan.textContent = dictationState.totalCorrect + '/' + dictationState.phrases.length;
     }
+
+    // Record session for progress tracking
+    const durationSec = sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0;
+    recordSession({
+        type: 'dictation',
+        durationSec,
+        phrasesAttempted: dictationState.phrases.length,
+        phrasesCorrect: dictationState.totalCorrect,
+        avgScore,
+        sourceText: currentSourceText
+    });
+
+    // Update text mastery
+    const phraseMastery = getBulkPhraseMastery(dictationState.phrases);
+    updateTextMastery(currentSourceText, phraseMastery);
+
+    // Refresh streak UI
+    updateStreakIndicator();
+    updateProgressDashboard();
 
     dictationState.isActive = false;
     console.log('Dictation complete! Score: ' + avgScore + '%');
@@ -372,6 +405,10 @@ function initDictation() {
     dictationState.scores = [];
     dictationState.totalCorrect = 0;
     dictationState.isActive = true;
+
+    // Track session start and source
+    sessionStartTime = Date.now();
+    currentSourceText = text.substring(0, 50).replace(/\s+/g, ' ').trim() || 'Dictation Practice';
 
     const hasSrc = mainAudioPlayer?.src && mainAudioPlayer.src.length > 0 && !mainAudioPlayer.src.endsWith('/');
     const hasDuration = mainAudioPlayer?.duration && mainAudioPlayer.duration > 0 && !isNaN(mainAudioPlayer.duration);

@@ -9,6 +9,19 @@ import { splitIntoPhrases } from './phrases.js';
 import { detectSilenceGaps, buildTimingsFromSilence, estimatePhraseTimings } from '../audio/analysis.js';
 import { base64ToBlob } from '../api.js';
 import { showToast } from '../ui/toast.js';
+import {
+    recordSession,
+    recordPhraseAttempt,
+    updateTextMastery,
+    getBulkPhraseMastery,
+    getPhraseMastery
+} from '../services/progressService.js';
+import { updateStreakIndicator, updateProgressDashboard } from '../ui/streak.js';
+
+// Session tracking
+let sessionStartTime = null;
+let currentSourceText = 'Unknown';
+let phrasesCompleted = 0;
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -48,7 +61,21 @@ export function renderPhraseList() {
     phraseList.innerHTML = '';
     shadowingState.phrases.forEach((phrase, index) => {
         const div = document.createElement('div');
-        div.className = 'phrase-item' + (index === shadowingState.currentIndex ? ' current' : '');
+
+        // Get mastery level for color coding (skip generic "Phrase X" names)
+        let masteryClass = '';
+        if (!phrase.startsWith('Phrase ')) {
+            const mastery = getPhraseMastery(phrase);
+            if (mastery.level === 'mastered') {
+                masteryClass = ' mastery-mastered';
+            } else if (mastery.level === 'struggling') {
+                masteryClass = ' mastery-struggling';
+            } else if (mastery.level === 'learning' && mastery.attempts > 0) {
+                masteryClass = ' mastery-learning';
+            }
+        }
+
+        div.className = 'phrase-item' + (index === shadowingState.currentIndex ? ' current' : '') + masteryClass;
         div.innerHTML = `
             <span class="phrase-number">${index + 1}</span>
             <span class="phrase-text">${escapeHtml(phrase)}</span>
@@ -149,6 +176,13 @@ function startGapWithDuration(phraseDuration) {
         if (loopCount === 0 || shadowingState.currentLoopIteration < loopCount) {
             playCurrentPhrase();
         } else {
+            // Phrase completed - record progress (score 100 for shadowing = completed)
+            const completedPhrase = shadowingState.phrases[shadowingState.currentIndex];
+            if (completedPhrase && !completedPhrase.startsWith('Phrase ')) {
+                recordPhraseAttempt(completedPhrase, 100, currentSourceText);
+            }
+            phrasesCompleted++;
+
             shadowingState.currentLoopIteration = 0;
             shadowingState.currentIndex++;
             playCurrentPhrase();
@@ -185,6 +219,13 @@ function startGap() {
         if (loopCount === 0 || shadowingState.currentLoopIteration < loopCount) {
             playCurrentPhrase();
         } else {
+            // Phrase completed - record progress (score 100 for shadowing = completed)
+            const completedPhrase = shadowingState.phrases[shadowingState.currentIndex];
+            if (completedPhrase && !completedPhrase.startsWith('Phrase ')) {
+                recordPhraseAttempt(completedPhrase, 100, currentSourceText);
+            }
+            phrasesCompleted++;
+
             shadowingState.currentLoopIteration = 0;
             shadowingState.currentIndex++;
             playCurrentPhrase();
@@ -307,6 +348,33 @@ function endShadowing() {
     if (shadowingAudio) shadowingAudio.pause();
     if (gapIndicator) gapIndicator.classList.remove('show');
     updatePlayPauseButton();
+
+    // Record session for progress tracking
+    const durationSec = sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0;
+    if (phrasesCompleted > 0 || shadowingState.currentIndex > 0) {
+        recordSession({
+            type: 'shadowing',
+            durationSec,
+            phrasesAttempted: shadowingState.phrases.length,
+            phrasesCorrect: phrasesCompleted,
+            avgScore: shadowingState.phrases.length > 0
+                ? Math.round((phrasesCompleted / shadowingState.phrases.length) * 100)
+                : 0,
+            sourceText: currentSourceText
+        });
+
+        // Update text mastery
+        const realPhrases = shadowingState.phrases.filter(p => !p.startsWith('Phrase '));
+        if (realPhrases.length > 0) {
+            const phraseMastery = getBulkPhraseMastery(realPhrases);
+            updateTextMastery(currentSourceText, phraseMastery);
+        }
+
+        // Refresh streak UI
+        updateStreakIndicator();
+        updateProgressDashboard();
+    }
+
     console.log('Shadowing session complete!');
 }
 
@@ -415,6 +483,11 @@ function initShadowing() {
     shadowingState.currentLoopIteration = 0;
     shadowingState.audioOnlyMode = audioOnlyMode;
     shadowingState.phraseAudioUrls = [];
+
+    // Track session start and source
+    sessionStartTime = Date.now();
+    phrasesCompleted = 0;
+    currentSourceText = text.substring(0, 50).replace(/\s+/g, ' ').trim() || 'Shadowing Practice';
 
     const existingAudioSrc = mainAudioPlayer?.src;
 

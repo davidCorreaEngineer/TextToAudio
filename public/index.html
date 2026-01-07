@@ -185,6 +185,69 @@
             background: var(--border);
         }
 
+        /* Streak Indicator */
+        .streak-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .streak-indicator:hover {
+            background: var(--border);
+        }
+
+        .streak-indicator i {
+            color: var(--text-muted);
+            transition: color var(--transition-fast);
+        }
+
+        .streak-indicator.active {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: #92400e;
+        }
+
+        [data-theme="dark"] .streak-indicator.active {
+            background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+            color: #fef3c7;
+        }
+
+        .streak-indicator.active i {
+            color: #f59e0b;
+        }
+
+        .streak-indicator.hot {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            color: #991b1b;
+        }
+
+        [data-theme="dark"] .streak-indicator.hot {
+            background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+            color: #fecaca;
+        }
+
+        .streak-indicator.hot i {
+            color: #ef4444;
+            animation: fire-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes fire-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        .streak-count {
+            min-width: 16px;
+            text-align: center;
+        }
+
         /* Theme Toggle Button */
         .theme-toggle {
             width: 40px;
@@ -1811,6 +1874,208 @@
         }
 
         /* ============================================
+           PROGRESS DASHBOARD MODAL
+           ============================================ */
+        .progress-modal-content {
+            max-width: 600px;
+        }
+
+        .progress-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+
+        .progress-stat-card {
+            text-align: center;
+            padding: var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+        }
+
+        .progress-stat-icon {
+            font-size: 1.25rem;
+            color: var(--accent);
+            margin-bottom: var(--space-xs);
+        }
+
+        .progress-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .progress-stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .progress-stat-sub {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .progress-sections {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+
+        .progress-section h4 {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            margin-bottom: var(--space-sm);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .progress-section h4 i {
+            color: var(--accent);
+        }
+
+        .progress-empty {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-style: italic;
+            padding: var(--space-sm);
+        }
+
+        .progress-sessions-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .progress-session-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+        }
+
+        .progress-session-item i {
+            color: var(--text-muted);
+            width: 16px;
+        }
+
+        .session-date {
+            color: var(--text-secondary);
+            min-width: 50px;
+        }
+
+        .session-type {
+            color: var(--text-primary);
+            flex: 1;
+            text-transform: capitalize;
+        }
+
+        .session-score {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .progress-weak-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .progress-weak-phrase {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+        }
+
+        .weak-phrase-text {
+            color: var(--text-primary);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: var(--space-md);
+        }
+
+        .weak-phrase-accuracy {
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .progress-mastery-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .progress-mastery-item {
+            display: grid;
+            grid-template-columns: 120px 1fr 40px;
+            align-items: center;
+            gap: var(--space-sm);
+            font-size: 0.8rem;
+        }
+
+        .mastery-label {
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .mastery-bar-container {
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+
+        .mastery-bar {
+            height: 100%;
+            border-radius: var(--radius-full);
+            transition: width var(--transition-normal);
+        }
+
+        .mastery-percent {
+            text-align: right;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .progress-footer {
+            margin-top: var(--space-lg);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border);
+        }
+
+        .storage-info {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        @media (max-width: 640px) {
+            .progress-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .progress-mastery-item {
+                grid-template-columns: 80px 1fr 35px;
+            }
+        }
+
+        /* ============================================
            RESPONSIVE
            ============================================ */
         @media (max-width: 1024px) {
@@ -2026,6 +2291,34 @@
         .phrase-item.current .phrase-status {
             background: var(--success);
             color: white;
+        }
+
+        /* Mastery level colors for phrases */
+        .phrase-item.mastery-mastered {
+            border-left: 3px solid var(--success);
+        }
+
+        .phrase-item.mastery-mastered .phrase-number {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .phrase-item.mastery-learning {
+            border-left: 3px solid var(--warning);
+        }
+
+        .phrase-item.mastery-learning .phrase-number {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .phrase-item.mastery-struggling {
+            border-left: 3px solid var(--error);
+        }
+
+        .phrase-item.mastery-struggling .phrase-number {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
         }
 
         /* Gap Indicator */
@@ -2460,6 +2753,11 @@
                 <span class="app-logo-text">VoiceCraft</span>
             </div>
             <div style="display: flex; align-items: center; gap: var(--space-md);">
+                <!-- Streak Indicator -->
+                <div class="streak-indicator" id="streakIndicator" title="Practice streak">
+                    <i class="fas fa-fire"></i>
+                    <span class="streak-count" id="streakCount">0</span>
+                </div>
                 <button class="theme-toggle" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode" aria-pressed="false">
                     <i class="fas fa-sun"></i>
                     <i class="fas fa-moon"></i>
