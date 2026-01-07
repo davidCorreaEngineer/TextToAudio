@@ -11,7 +11,15 @@ const {
     countCharactersInSsml,
     countCharactersInSsmlText,
     QUOTA_LIMITS,
+    BYTE_BASED_VOICES,
 } = require('./src/utils');
+const {
+    calculateQuotaCount,
+    updateQuota,
+    checkQuotaAllows,
+    getQuotaData,
+    formatQuotaExceededError,
+} = require('./src/services/quotaService');
 const { createApiKeyAuthMiddleware } = require('./src/middleware/auth');
 const { createRateLimitMiddleware } = require('./src/middleware/rateLimit');
 const { createCorsOptions, parseCorsConfig } = require('./src/middleware/cors');
@@ -87,6 +95,9 @@ const RATE_LIMIT_MAX_REQUESTS = 10;     // 10 requests per minute per IP
 
 // File cleanup: delete audio files older than this
 const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+// Quota file path
+const QUOTA_FILE_PATH = path.join(__dirname, 'quota.json');
 
 // =============================================================================
 // INPUT VALIDATION
@@ -263,87 +274,7 @@ app.use(express.json({ limit: '100kb' }));
 
 // **1. Voice Type Mapping Function**
 // Utility functions (getVoiceCategory, countCharacters, countBytes) imported from src/utils.js
-
-// **Mutex for Quota Updates (prevents race conditions)**
-let quotaLock = Promise.resolve();
-
-// **5. Update Quota Function with Mutex Lock**
-async function updateQuota(voiceType, count) {
-    // Acquire lock by chaining onto the previous operation
-    const releaseLock = new Promise(resolve => {
-        quotaLock = quotaLock.then(async () => {
-            const quotaFile = path.join(__dirname, 'quota.json');
-            let quota = {};
-
-            try {
-                const data = await fs.readFile(quotaFile, 'utf8');
-                quota = JSON.parse(data);
-                console.log("Quota data loaded:", quota);
-            } catch (error) {
-                // File doesn't exist or is empty, start with an empty object
-                console.log("Quota file not found or empty. Starting fresh.");
-            }
-
-            const currentDate = new Date();
-            const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
-
-            if (!quota[yearMonth]) {
-                quota[yearMonth] = {};
-            }
-
-            if (!quota[yearMonth][voiceType]) {
-                quota[yearMonth][voiceType] = 0;
-            }
-
-            quota[yearMonth][voiceType] += count;
-
-            await fs.writeFile(quotaFile, JSON.stringify(quota, null, 2));
-            console.log(`Quota updated for ${voiceType} in ${yearMonth}: ${quota[yearMonth][voiceType]}`);
-            resolve();
-        });
-    });
-
-    await releaseLock;
-}
-
-// **6. Check Quota Before API Call**
-async function checkQuotaAllows(voiceType, requestedCount) {
-    const quotaFile = path.join(__dirname, 'quota.json');
-    const limit = QUOTA_LIMITS[voiceType];
-
-    // If no limit defined for this voice type, allow (but log warning)
-    if (limit === undefined) {
-        console.warn(`No quota limit defined for voice type: ${voiceType}`);
-        return { allowed: true };
-    }
-
-    let quota = {};
-    try {
-        const data = await fs.readFile(quotaFile, 'utf8');
-        quota = JSON.parse(data);
-    } catch (error) {
-        // File doesn't exist, no usage yet
-        return { allowed: true, currentUsage: 0, limit };
-    }
-
-    const currentDate = new Date();
-    const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
-
-    const currentUsage = (quota[yearMonth] && quota[yearMonth][voiceType]) || 0;
-    const projectedUsage = currentUsage + requestedCount;
-
-    if (projectedUsage > limit) {
-        return {
-            allowed: false,
-            currentUsage,
-            limit,
-            requested: requestedCount,
-            remaining: Math.max(0, limit - currentUsage)
-        };
-    }
-
-    return { allowed: true, currentUsage, limit };
-}
+// Quota functions (updateQuota, checkQuotaAllows) imported from src/services/quotaService.js
 
 // **7. Root Route**
 app.get('/', (req, res) => {
@@ -498,53 +429,26 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
             }
         }
 
-        // **Determine voice category first for correct quota counting**
-        const voiceCategory = getVoiceCategory(validation.sanitized.voice);
-
-        // **Adjust Counting for Quota Based on Voice Type**
-        // Neural2, Studio, Polyglot, and Journey are billed by bytes
-        // Standard and WaveNet are billed by characters
-        const byteBasedVoices = ['Neural2', 'Studio', 'Polyglot', 'Journey'];
-        let count;
-
-        if (byteBasedVoices.includes(voiceCategory)) {
-            // Count bytes for byte-based voices
-            if (useSsml) {
-                count = countBytes(countCharactersInSsmlText(text));
-            } else {
-                count = countBytes(text);
-            }
-            console.log(`Byte count for quota (${voiceCategory}): ${count}`);
-        } else {
-            // Count characters for character-based voices (Standard, WaveNet)
-            if (useSsml) {
-                count = countCharactersInSsml(text);
-            } else {
-                count = countCharacters(text);
-            }
-            console.log(`Character count for quota (${voiceCategory}): ${count}`);
-        }
+        // **Calculate quota count using quota service**
+        const { count, voiceCategory, unit } = calculateQuotaCount(text, validation.sanitized.voice, useSsml);
+        console.log(`${unit.charAt(0).toUpperCase() + unit.slice(1)} count for quota (${voiceCategory}): ${count}`);
 
         // **Check Text Length**
         if (count > MAX_TEXT_LENGTH) {
             console.log(`Text exceeds maximum allowed size of ${MAX_TEXT_LENGTH} characters.`);
             return res.status(400).json({
                 success: false,
-                error: `Text is too long (${count} characters). Maximum allowed is ${MAX_TEXT_LENGTH} characters.`
+                error: `Text is too long (${count} ${unit}). Maximum allowed is ${MAX_TEXT_LENGTH}.`
             });
         }
 
         // **Check Quota BEFORE Making API Call**
-        const quotaCheck = await checkQuotaAllows(voiceCategory, count);
+        const quotaCheck = await checkQuotaAllows(voiceCategory, count, QUOTA_FILE_PATH);
         if (!quotaCheck.allowed) {
-            const unit = byteBasedVoices.includes(voiceCategory) ? 'bytes' : 'characters';
             console.log(`Quota exceeded for ${voiceCategory}: ${quotaCheck.currentUsage}/${quotaCheck.limit} ${unit}`);
             return res.status(429).json({
                 success: false,
-                error: `Monthly quota exceeded for ${voiceCategory} voices. ` +
-                       `Used: ${quotaCheck.currentUsage.toLocaleString()} / ${quotaCheck.limit.toLocaleString()} ${unit}. ` +
-                       `Remaining: ${quotaCheck.remaining.toLocaleString()} ${unit}. ` +
-                       `Try a shorter text or different voice type.`
+                error: formatQuotaExceededError(voiceCategory, quotaCheck)
             });
         }
 
@@ -559,7 +463,7 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
         console.log("Audio synthesized successfully.");
 
         // Update quota (voiceCategory already determined above)
-        await updateQuota(voiceCategory, count);
+        await updateQuota(voiceCategory, count, QUOTA_FILE_PATH);
         console.log("Quota updated.");
 
         // Generate output filename based on input source
@@ -592,18 +496,9 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
 // Protected by API key authentication
 app.get('/dashboard', apiKeyAuthMiddleware, async (req, res) => {
     try {
-        const quotaFile = path.join(__dirname, 'quota.json');
-        let quota = {};
-
-        try {
-            const data = await fs.readFile(quotaFile, 'utf8');
-            quota = JSON.parse(data);
-            console.log("Quota data loaded for dashboard:", quota);
-        } catch (error) {
-            console.log("Quota file not found or empty. Sending empty quota data.");
-        }
-
-        res.json({ quota: quota });
+        const quota = await getQuotaData(QUOTA_FILE_PATH);
+        console.log("Quota data loaded for dashboard:", quota);
+        res.json({ quota });
         console.log("Quota data sent to dashboard.");
     } catch (error) {
         console.error("Error fetching quota for dashboard:", error);
@@ -724,8 +619,6 @@ app.post('/synthesize-batch', apiKeyAuthMiddleware, rateLimitMiddleware, upload.
         }
 
         const results = [];
-        const voiceCategory = getVoiceCategory(validation.sanitized.voice);
-        const byteBasedVoices = ['Neural2', 'Studio', 'Polyglot', 'Journey'];
 
         // Process each file sequentially
         for (let i = 0; i < req.files.length; i++) {
@@ -746,29 +639,23 @@ app.post('/synthesize-batch', apiKeyAuthMiddleware, rateLimitMiddleware, upload.
                     continue;
                 }
 
-                // Count for quota
-                let count;
-                if (byteBasedVoices.includes(voiceCategory)) {
-                    count = useSsml ? countBytes(countCharactersInSsmlText(text)) : countBytes(text);
-                } else {
-                    count = useSsml ? countCharactersInSsml(text) : countCharacters(text);
-                }
+                // Calculate quota count using quota service
+                const { count, voiceCategory, unit } = calculateQuotaCount(text, validation.sanitized.voice, useSsml);
 
                 // Check text length
                 if (count > MAX_TEXT_LENGTH) {
                     results.push({
                         success: false,
                         fileName: file.originalname,
-                        error: `Text too long (${count} characters). Max: ${MAX_TEXT_LENGTH}`
+                        error: `Text too long (${count} ${unit}). Max: ${MAX_TEXT_LENGTH}`
                     });
                     await fs.unlink(file.path);
                     continue;
                 }
 
                 // Check quota
-                const quotaCheck = await checkQuotaAllows(voiceCategory, count);
+                const quotaCheck = await checkQuotaAllows(voiceCategory, count, QUOTA_FILE_PATH);
                 if (!quotaCheck.allowed) {
-                    const unit = byteBasedVoices.includes(voiceCategory) ? 'bytes' : 'characters';
                     results.push({
                         success: false,
                         fileName: file.originalname,
@@ -789,7 +676,7 @@ app.post('/synthesize-batch', apiKeyAuthMiddleware, rateLimitMiddleware, upload.
                 });
 
                 // Update quota
-                await updateQuota(voiceCategory, count);
+                await updateQuota(voiceCategory, count, QUOTA_FILE_PATH);
 
                 // Save audio file
                 const sanitizedFileName = fileName.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
