@@ -21,6 +21,11 @@ const {
     formatQuotaExceededError,
 } = require('./src/services/quotaService');
 const { createGermanLessonsRouter } = require('./src/routes/germanLessonsRouter');
+const {
+    SUPPORTED_LANGUAGES,
+    validateVoiceParams,
+    validateSsml,
+} = require('./src/validators/inputValidation');
 const { createApiKeyAuthMiddleware } = require('./src/middleware/auth');
 const { createRateLimitMiddleware } = require('./src/middleware/rateLimit');
 const { createCorsOptions, parseCorsConfig } = require('./src/middleware/cors');
@@ -103,101 +108,7 @@ const QUOTA_FILE_PATH = path.join(__dirname, 'quota.json');
 // =============================================================================
 // INPUT VALIDATION
 // =============================================================================
-
-// Supported languages for TTS
-const SUPPORTED_LANGUAGES = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
-
-// Voice name pattern: language-region-VoiceType-Letter (e.g., en-US-Standard-A)
-const VOICE_NAME_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9]+-[A-Z]$/;
-
-/**
- * Validates and sanitizes voice parameters
- * @param {Object} params - Raw parameters from request
- * @returns {Object} - { valid: boolean, errors: string[], sanitized: Object }
- */
-function validateVoiceParams({ language, voice, speakingRate, pitch }) {
-    const errors = [];
-    const sanitized = {};
-
-    // Validate language
-    if (!language || typeof language !== 'string') {
-        errors.push('Language is required');
-    } else if (!SUPPORTED_LANGUAGES.includes(language)) {
-        errors.push(`Unsupported language: ${language}. Supported: ${SUPPORTED_LANGUAGES.join(', ')}`);
-    } else {
-        sanitized.language = language;
-    }
-
-    // Validate voice name format
-    if (!voice || typeof voice !== 'string') {
-        errors.push('Voice is required');
-    } else if (!VOICE_NAME_PATTERN.test(voice)) {
-        errors.push(`Invalid voice name format: ${voice}`);
-    } else {
-        sanitized.voice = voice;
-    }
-
-    // Validate and clamp speaking rate (0.25 to 4.0)
-    const rate = parseFloat(speakingRate);
-    if (isNaN(rate)) {
-        sanitized.speakingRate = 1.0;
-    } else {
-        sanitized.speakingRate = Math.max(0.25, Math.min(4.0, rate));
-    }
-
-    // Validate and clamp pitch (-20.0 to 20.0)
-    const pitchVal = parseFloat(pitch);
-    if (isNaN(pitchVal)) {
-        sanitized.pitch = 0.0;
-    } else {
-        sanitized.pitch = Math.max(-20.0, Math.min(20.0, pitchVal));
-    }
-
-    return {
-        valid: errors.length === 0,
-        errors,
-        sanitized
-    };
-}
-
-/**
- * Basic SSML validation - checks for well-formed structure
- * @param {string} text - Text that may contain SSML
- * @returns {Object} - { valid: boolean, error: string|null }
- */
-function validateSsml(text) {
-    if (!text || typeof text !== 'string') {
-        return { valid: false, error: 'Text is required' };
-    }
-
-    // Check for potentially malicious patterns
-    const dangerousPatterns = [
-        /<script/i,
-        /javascript:/i,
-        /on\w+\s*=/i,  // onclick, onerror, etc.
-        /<iframe/i,
-        /<object/i,
-        /<embed/i
-    ];
-
-    for (const pattern of dangerousPatterns) {
-        if (pattern.test(text)) {
-            return { valid: false, error: 'Text contains disallowed content' };
-        }
-    }
-
-    // If text looks like SSML, do basic structure check
-    if (text.includes('<speak>') || text.includes('</speak>')) {
-        // Check for balanced speak tags
-        const speakOpen = (text.match(/<speak>/g) || []).length;
-        const speakClose = (text.match(/<\/speak>/g) || []).length;
-        if (speakOpen !== speakClose) {
-            return { valid: false, error: 'Unbalanced <speak> tags in SSML' };
-        }
-    }
-
-    return { valid: true, error: null };
-}
+// Validation functions (validateVoiceParams, validateSsml) imported from src/validators/inputValidation.js
 
 // =============================================================================
 // SECURITY: API KEY AUTHENTICATION
