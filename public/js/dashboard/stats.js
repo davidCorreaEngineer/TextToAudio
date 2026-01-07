@@ -5,13 +5,7 @@
 import { fetchDashboard } from '../api.js';
 import { FREE_TIER_LIMITS } from '../config.js';
 import { renderUsageChart, renderVoiceTypeChart, setUsageChartRef, setVoiceTypeChartRef } from './charts.js';
-
-// Security: Escape HTML to prevent XSS
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
+import { escapeHtml } from '../utils/html.js';
 
 export function getCurrentYearMonth() {
     const now = new Date();

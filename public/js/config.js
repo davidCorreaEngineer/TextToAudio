@@ -81,6 +81,3 @@ export function getAuthHeaders(additionalHeaders = {}) {
         ...additionalHeaders
     };
 }
-
-// Expose clearApiKey globally for logout button
-window.clearApiKey = clearApiKey;

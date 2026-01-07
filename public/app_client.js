@@ -15,7 +15,7 @@ import { initStreakUI, updateStreakIndicator, updateProgressDashboard } from './
 
 // Audio Modules
 import { initAudioPlayerEvents, initAudioTest } from './js/audio/player.js';
-import { renderLibrary, getAudioItems, initLibraryCount } from './js/audio/library.js';
+import { renderLibrary, getAudioItems, initLibraryCount, initLibraryEvents } from './js/audio/library.js';
 import { initAudioDropZone } from './js/audio/dropZone.js';
 
 // Synthesis Modules
@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Initialize audio library
     setAudioItemsRef(getAudioItems());
+    initLibraryEvents();
 
     // Load initial data
     loadVoices();

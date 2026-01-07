@@ -2,12 +2,7 @@
 // AUDIO LIBRARY MODULE
 // ==========================================================================
 
-// HTML escape to prevent XSS
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+import { escapeHtml } from '../utils/html.js';
 
 let audioItems = [];
 try {
@@ -94,19 +89,19 @@ export function renderLibrary() {
                 <div class="audio-card-waveform" id="waveform-${item.id}"></div>
             </div>
             <div class="audio-card-controls">
-                <button class="audio-card-play" onclick="playAudioCard(${item.id})">
+                <button class="audio-card-play" data-action="play" data-id="${item.id}">
                     <i class="fas fa-play"></i>
                 </button>
                 <span class="audio-card-duration">${item.duration}</span>
                 <div class="audio-card-actions">
                     <button class="audio-card-btn favorite ${item.favorite ? 'active' : ''}"
-                            onclick="toggleFavorite(${item.id})" title="Favorite">
+                            data-action="favorite" data-id="${item.id}" title="Favorite">
                         <i class="fas fa-star"></i>
                     </button>
-                    <button class="audio-card-btn" onclick="downloadAudioCard(${item.id})" title="Download">
+                    <button class="audio-card-btn" data-action="download" data-id="${item.id}" title="Download">
                         <i class="fas fa-download"></i>
                     </button>
-                    <button class="audio-card-btn" onclick="removeFromLibrary(${item.id})" title="Delete">
+                    <button class="audio-card-btn" data-action="delete" data-id="${item.id}" title="Delete">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -148,16 +143,15 @@ export function initLibraryCount() {
     updateLibraryCount();
 }
 
-// Expose functions to window scope for onclick handlers in HTML
-window.playAudioCard = function(id) {
+function playAudioCard(id) {
     const item = audioItems.find(i => i.id === id);
     if (item) {
         const audio = new Audio(item.audioUrl);
         audio.play();
     }
-};
+}
 
-window.downloadAudioCard = function(id) {
+function downloadAudioCard(id) {
     const item = audioItems.find(i => i.id === id);
     if (item) {
         const a = document.createElement('a');
@@ -165,8 +159,35 @@ window.downloadAudioCard = function(id) {
         a.download = `audio-${item.id}.mp3`;
         a.click();
     }
-};
+}
 
-window.toggleFavorite = toggleFavorite;
-window.removeFromLibrary = removeFromLibrary;
-window.addToLibrary = addToLibrary;
+/**
+ * Initialize event delegation for audio library actions
+ */
+export function initLibraryEvents() {
+    const audioLibrary = document.getElementById('audioLibrary');
+    if (!audioLibrary) return;
+
+    audioLibrary.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const id = parseInt(button.dataset.id, 10);
+
+        switch (action) {
+            case 'play':
+                playAudioCard(id);
+                break;
+            case 'download':
+                downloadAudioCard(id);
+                break;
+            case 'favorite':
+                toggleFavorite(id);
+                break;
+            case 'delete':
+                removeFromLibrary(id);
+                break;
+        }
+    });
+}

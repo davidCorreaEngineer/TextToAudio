@@ -17,17 +17,12 @@ import {
     getPhraseMastery
 } from '../services/progressService.js';
 import { updateStreakIndicator, updateProgressDashboard } from '../ui/streak.js';
+import { escapeHtml } from '../utils/html.js';
 
 // Session tracking
 let sessionStartTime = null;
 let currentSourceText = 'Unknown';
 let phrasesCompleted = 0;
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 function updatePlayPauseButton() {
     const { shadowingPlayPauseBtn } = dom;

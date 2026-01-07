@@ -59,7 +59,3 @@ export function setButtonLoading(button, loading) {
         button.disabled = false;
     }
 }
-
-// Expose globally for use in other modules
-window.showLibraryLoading = showLibraryLoading;
-window.setButtonLoading = setButtonLoading;

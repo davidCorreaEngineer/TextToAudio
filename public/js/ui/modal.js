@@ -3,6 +3,8 @@
 // ==========================================================================
 // Accessible modal dialogs with focus trap, keyboard navigation, and ARIA
 
+import { escapeHtml } from '../utils/html.js';
+
 let activeModal = null;
 let previousActiveElement = null;
 let focusTrapListener = null;
@@ -407,12 +409,3 @@ function getFirstFocusable(container) {
     return elements[0] || null;
 }
 
-/**
- * Escapes HTML special characters
- */
-function escapeHtml(str) {
-    if (typeof str !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}

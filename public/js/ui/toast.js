@@ -79,6 +79,3 @@ export function showToast(type, title, message = '', duration = 4000) {
 
     return toast;
 }
-
-// Expose globally for HTML onclick handlers
-window.showToast = showToast;

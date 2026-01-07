@@ -9,6 +9,8 @@ import { stripComments, convertTextToSsml } from './textProcessing.js';
 import { loadAudioIntoPlayer } from '../audio/player.js';
 import { showToast } from '../ui/toast.js';
 import { setButtonLoading } from '../ui/loading.js';
+import { addToLibrary } from '../audio/library.js';
+import { incrementPhrases } from '../ui/fab.js';
 
 // Reference to fetchUsageStats - will be set by app_client.js
 let fetchUsageStatsRef = null;
@@ -182,10 +184,8 @@ export function initFormSubmission() {
                         loadAudioIntoPlayer(result.file, result.fileName);
 
                         // Add to library
-                        if (typeof window.addToLibrary === 'function') {
-                            window.addToLibrary(result.file, processedText, '0:00');
-                            window.incrementPhrases?.();
-                        }
+                        addToLibrary(result.file, processedText, '0:00');
+                        incrementPhrases();
 
                         // Refresh usage stats
                         if (fetchUsageStatsRef) {

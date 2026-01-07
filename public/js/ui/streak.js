@@ -12,6 +12,7 @@ import {
     getStorageInfo
 } from '../services/progressService.js';
 import { showModal } from './modal.js';
+import { escapeHtml } from '../utils/html.js';
 
 /**
  * Update the streak indicator in the header
@@ -208,16 +209,6 @@ export function showProgressDashboardModal() {
             { label: 'Close', variant: 'primary' }
         ]
     });
-}
-
-/**
- * Escape HTML special characters
- */
-function escapeHtml(str) {
-    if (typeof str !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
 }
 
 /**

@@ -145,6 +145,3 @@ export function incrementPhrases() {
     localStorage.setItem('learningStats', JSON.stringify(stats));
     updateDashboard();
 }
-
-// Expose globally
-window.incrementPhrases = incrementPhrases;

@@ -5,15 +5,9 @@
 import { dom } from '../dom.js';
 import { setOriginalFileName } from '../state.js';
 import { updateShadowingVisibility } from '../practice/shadowing.js';
+import { escapeHtml } from '../utils/html.js';
 
 const MAX_TEXT_LENGTH = 5000;
-
-// Security: Escape HTML to prevent XSS in file names
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 export function initFileUploadHandlers() {
     const {
