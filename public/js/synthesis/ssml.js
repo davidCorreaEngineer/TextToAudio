@@ -3,6 +3,7 @@
 // ==========================================================================
 
 import { dom } from '../dom.js';
+import { showPrompt, showModal } from '../ui/modal.js';
 
 function updateEditorCharCount() {
     const { textEditor, editorCharCount } = dom;
@@ -62,8 +63,13 @@ export function initSSMLToolbar() {
 
     // Pause button - inserts a break tag
     if (ssmlPauseBtn) {
-        ssmlPauseBtn.addEventListener('click', () => {
-            const pauseMs = prompt('Enter pause duration in milliseconds:', '500');
+        ssmlPauseBtn.addEventListener('click', async () => {
+            const pauseMs = await showPrompt('Enter pause duration in milliseconds:', '500', {
+                inputType: 'number',
+                min: 0,
+                max: 10000,
+                step: 100
+            });
             if (pauseMs !== null && textEditor) {
                 const start = textEditor.selectionStart;
                 const pauseTag = `<break time="${pauseMs}ms"/>`;
@@ -79,8 +85,15 @@ export function initSSMLToolbar() {
 
     // Emphasis button
     if (ssmlEmphasisBtn) {
-        ssmlEmphasisBtn.addEventListener('click', () => {
-            const level = prompt('Emphasis level (strong, moderate, reduced):', 'strong');
+        ssmlEmphasisBtn.addEventListener('click', async () => {
+            const level = await showPrompt('Select emphasis level:', 'strong', {
+                inputType: 'select',
+                selectOptions: [
+                    { value: 'strong', label: 'Strong' },
+                    { value: 'moderate', label: 'Moderate' },
+                    { value: 'reduced', label: 'Reduced' }
+                ]
+            });
             if (level !== null) {
                 insertSSMLTag(`<emphasis level="${level}">`, '</emphasis>', 'emphasized text');
             }
@@ -110,11 +123,20 @@ export function initSSMLToolbar() {
 
     // Say-as button (for numbers, dates, etc.)
     if (ssmlSayAsBtn) {
-        ssmlSayAsBtn.addEventListener('click', () => {
-            const interpretAs = prompt(
-                'Interpret as (cardinal, ordinal, characters, fraction, date, time, telephone, currency):',
-                'cardinal'
-            );
+        ssmlSayAsBtn.addEventListener('click', async () => {
+            const interpretAs = await showPrompt('Select interpretation type:', 'cardinal', {
+                inputType: 'select',
+                selectOptions: [
+                    { value: 'cardinal', label: 'Cardinal (123)' },
+                    { value: 'ordinal', label: 'Ordinal (1st, 2nd)' },
+                    { value: 'characters', label: 'Characters (ABC)' },
+                    { value: 'fraction', label: 'Fraction (1/2)' },
+                    { value: 'date', label: 'Date' },
+                    { value: 'time', label: 'Time' },
+                    { value: 'telephone', label: 'Telephone' },
+                    { value: 'currency', label: 'Currency' }
+                ]
+            });
             if (interpretAs !== null) {
                 insertSSMLTag(`<say-as interpret-as="${interpretAs}">`, '</say-as>', '123');
             }
@@ -124,33 +146,41 @@ export function initSSMLToolbar() {
     // Help button - show SSML reference
     if (ssmlHelpBtn) {
         ssmlHelpBtn.addEventListener('click', () => {
-            alert(`SSML Quick Reference:
+            const helpContent = `
+                <div class="ssml-help">
+                    <h4>Breaks/Pauses</h4>
+                    <code>&lt;break time="500ms"/&gt;</code> - Pause for 500 milliseconds<br>
+                    <code>&lt;break strength="strong"/&gt;</code> - Natural pause
 
-BREAKS/PAUSES:
-<break time="500ms"/> - Pause for 500 milliseconds
-<break strength="strong"/> - Natural pause
+                    <h4>Emphasis</h4>
+                    <code>&lt;emphasis level="strong"&gt;text&lt;/emphasis&gt;</code><br>
+                    Levels: strong, moderate, reduced
 
-EMPHASIS:
-<emphasis level="strong">text</emphasis>
-Levels: strong, moderate, reduced
+                    <h4>Prosody (Speed, Pitch, Volume)</h4>
+                    <code>&lt;prosody rate="slow"&gt;text&lt;/prosody&gt;</code><br>
+                    <code>&lt;prosody pitch="+2st"&gt;text&lt;/prosody&gt;</code><br>
+                    <code>&lt;prosody volume="loud"&gt;text&lt;/prosody&gt;</code><br>
+                    <small>Rate: x-slow, slow, medium, fast, x-fast, or percentage</small><br>
+                    <small>Pitch: x-low, low, medium, high, x-high, or +/-Xst</small>
 
-PROSODY (Speed, Pitch, Volume):
-<prosody rate="slow">text</prosody>
-<prosody pitch="+2st">text</prosody>
-<prosody volume="loud">text</prosody>
-Rate: x-slow, slow, medium, fast, x-fast, or percentage
-Pitch: x-low, low, medium, high, x-high, or +/-Xst
+                    <h4>Say-As (Interpretation)</h4>
+                    <code>&lt;say-as interpret-as="cardinal"&gt;123&lt;/say-as&gt;</code><br>
+                    <code>&lt;say-as interpret-as="ordinal"&gt;1&lt;/say-as&gt;</code><br>
+                    <code>&lt;say-as interpret-as="characters"&gt;ABC&lt;/say-as&gt;</code><br>
+                    <code>&lt;say-as interpret-as="date" format="mdy"&gt;12/25/2024&lt;/say-as&gt;</code>
 
-SAY-AS (Interpretation):
-<say-as interpret-as="cardinal">123</say-as>
-<say-as interpret-as="ordinal">1</say-as>
-<say-as interpret-as="characters">ABC</say-as>
-<say-as interpret-as="date" format="mdy">12/25/2024</say-as>
+                    <h4>Substitution</h4>
+                    <code>&lt;sub alias="World Wide Web"&gt;WWW&lt;/sub&gt;</code>
 
-SUB (Substitution):
-<sub alias="World Wide Web">WWW</sub>
+                    <p><em>Tip: Select text before clicking toolbar buttons to wrap existing text.</em></p>
+                </div>
+            `;
 
-Note: Select text before clicking toolbar buttons to wrap existing text.`);
+            showModal({
+                title: 'SSML Quick Reference',
+                body: helpContent,
+                buttons: [{ label: 'Close', variant: 'primary' }]
+            });
         });
     }
 }

@@ -2,6 +2,8 @@
 // CONFIGURATION & CONSTANTS
 // ==========================================================================
 
+import { showPrompt } from './ui/modal.js';
+
 export const MAX_TEXT_LENGTH = 5000;
 
 export const FREE_TIER_LIMITS = {
@@ -16,17 +18,59 @@ export const FREE_TIER_LIMITS = {
 // API Key Management
 let apiKey = localStorage.getItem('tts_api_key') || '';
 
+/**
+ * Gets the API key, prompting user if not set
+ * Note: This is synchronous for backward compatibility.
+ * Use promptForApiKey() for async modal-based input.
+ * @returns {string} The API key
+ */
 export function getApiKey() {
-    if (!apiKey) {
-        apiKey = prompt('Please enter your API key to use this application:');
-        if (apiKey) {
-            localStorage.setItem('tts_api_key', apiKey);
-        }
-    }
     return apiKey;
 }
 
+/**
+ * Prompts user for API key using secure modal
+ * @returns {Promise<string|null>} The entered API key or null if cancelled
+ */
+export async function promptForApiKey() {
+    const key = await showPrompt(
+        'Please enter your API key to use this application:',
+        '',
+        { inputType: 'password' }
+    );
+
+    if (key) {
+        apiKey = key;
+        localStorage.setItem('tts_api_key', apiKey);
+    }
+
+    return key;
+}
+
+/**
+ * Checks if API key is set, prompts if not
+ * Call this at app initialization
+ * @returns {Promise<boolean>} True if API key is available
+ */
+export async function ensureApiKey() {
+    if (apiKey) {
+        return true;
+    }
+
+    const key = await promptForApiKey();
+    return !!key;
+}
+
+/**
+ * Checks if API key is currently set
+ * @returns {boolean}
+ */
+export function hasApiKey() {
+    return !!apiKey;
+}
+
 export function clearApiKey() {
+    apiKey = '';
     localStorage.removeItem('tts_api_key');
     location.reload();
 }

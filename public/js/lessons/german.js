@@ -8,6 +8,7 @@ import { setOriginalFileName } from '../state.js';
 import { updateEditorCharCount } from '../synthesis/ssml.js';
 import { updateShadowingVisibility } from '../practice/shadowing.js';
 import { loadVoices } from '../synthesis/voices.js';
+import { showToast } from '../ui/toast.js';
 
 export async function loadGermanLessons() {
     const { germanLessonSelect } = dom;
@@ -41,7 +42,7 @@ export async function loadSelectedGermanLesson() {
 
     const filename = germanLessonSelect?.value;
     if (!filename) {
-        alert('Please select a lesson first.');
+        showToast('warning', 'No Lesson Selected', 'Please select a lesson first.');
         return;
     }
 
@@ -73,7 +74,7 @@ export async function loadSelectedGermanLesson() {
         }
     } catch (error) {
         console.error('Error loading German lesson:', error);
-        alert('Error loading lesson: ' + error.message);
+        showToast('error', 'Failed to Load Lesson', error.message);
     } finally {
         if (loadGermanLessonBtn) {
             loadGermanLessonBtn.disabled = false;

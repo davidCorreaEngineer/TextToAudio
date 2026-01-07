@@ -1569,6 +1569,248 @@
         }
 
         /* ============================================
+           MODAL DIALOG
+           ============================================ */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--transition-normal), visibility var(--transition-normal);
+        }
+
+        .modal-backdrop.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-backdrop[hidden] {
+            display: none;
+        }
+
+        .modal {
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            max-width: 480px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            transform: scale(0.95) translateY(-10px);
+            transition: transform var(--transition-normal);
+        }
+
+        .modal-backdrop.show .modal {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+        }
+
+        .modal-close:hover {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: var(--space-lg);
+            overflow-y: auto;
+            max-height: calc(90vh - 140px);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-sm);
+            padding: var(--space-md) var(--space-lg);
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .modal-btn {
+            padding: var(--space-sm) var(--space-lg);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .modal-btn.secondary {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .modal-btn.secondary:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+
+        .modal-btn.primary {
+            background: var(--accent);
+            border: 1px solid var(--accent);
+            color: white;
+        }
+
+        .modal-btn.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .modal-btn.danger {
+            background: var(--error);
+            border: 1px solid var(--error);
+            color: white;
+        }
+
+        .modal-btn.danger:hover {
+            background: #dc2626;
+        }
+
+        /* Modal Alert Styles */
+        .modal-alert {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-md);
+        }
+
+        .modal-alert p {
+            margin: 0;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .modal-icon {
+            flex-shrink: 0;
+        }
+
+        .modal-icon.info { color: var(--accent); }
+        .modal-icon.warning { color: var(--warning); }
+        .modal-icon.error { color: var(--error); }
+        .modal-icon.success { color: var(--success); }
+
+        /* Modal Prompt Styles */
+        .modal-prompt label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-md);
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            transition: border-color var(--transition-fast);
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Password Input Container */
+        .modal-password-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .modal-password-container .modal-input {
+            padding-right: 44px;
+        }
+
+        .modal-password-toggle {
+            position: absolute;
+            right: var(--space-sm);
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: var(--space-xs);
+            border-radius: var(--radius-sm);
+            transition: color var(--transition-fast);
+        }
+
+        .modal-password-toggle:hover {
+            color: var(--text-primary);
+        }
+
+        /* Modal Confirm Message */
+        .modal-confirm-message {
+            margin: 0;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        /* SSML Help Modal */
+        .ssml-help h4 {
+            margin: var(--space-md) 0 var(--space-xs);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .ssml-help h4:first-child {
+            margin-top: 0;
+        }
+
+        .ssml-help code {
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            color: var(--accent);
+        }
+
+        .ssml-help small {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .ssml-help p {
+            margin: var(--space-md) 0 0;
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border);
+        }
+
+        /* ============================================
            RESPONSIVE
            ============================================ */
         @media (max-width: 1024px) {
@@ -2196,6 +2438,18 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Modal Dialog -->
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle"></h3>
+                <button type="button" class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
@@ -2206,7 +2460,7 @@
                 <span class="app-logo-text">VoiceCraft</span>
             </div>
             <div style="display: flex; align-items: center; gap: var(--space-md);">
-                <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+                <button class="theme-toggle" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode" aria-pressed="false">
                     <i class="fas fa-sun"></i>
                     <i class="fas fa-moon"></i>
                 </button>
@@ -2409,6 +2663,8 @@ Select text and use the toolbar buttons above!"
                             max="4.0"
                             step="0.05"
                             value="1.0"
+                            aria-label="Speaking speed"
+                            aria-valuetext="1.0x speed"
                         />
                     </div>
                     <div class="slider-item">
@@ -2425,6 +2681,8 @@ Select text and use the toolbar buttons above!"
                             max="20.0"
                             step="0.5"
                             value="0"
+                            aria-label="Pitch adjustment"
+                            aria-valuetext="0 semitones"
                         />
                     </div>
                 </div>
@@ -2553,7 +2811,7 @@ Select text and use the toolbar buttons above!"
                 <div class="gap-indicator" id="gapIndicator">
                     <i class="fas fa-microphone"></i>
                     <p>Your turn! Repeat the phrase</p>
-                    <div class="gap-timer" id="gapTimer">3.0s</div>
+                    <div class="gap-timer" id="gapTimer" aria-live="polite" aria-atomic="true">3.0s</div>
                 </div>
 
                 <!-- Hidden audio element for phrase playback -->
@@ -2591,25 +2849,25 @@ Select text and use the toolbar buttons above!"
                         </div>
                     </div>
 
-                    <div class="shadowing-buttons">
-                        <button type="button" class="btn btn-secondary" id="shadowingPrevBtn" title="Previous phrase">
+                    <div class="shadowing-buttons" role="toolbar" aria-label="Shadowing playback controls">
+                        <button type="button" class="btn btn-secondary" id="shadowingPrevBtn" title="Previous phrase" aria-label="Previous phrase">
                             <i class="fas fa-step-backward"></i>
                         </button>
-                        <button type="button" class="btn btn-primary" id="shadowingPlayPauseBtn" title="Play/Pause">
+                        <button type="button" class="btn btn-primary" id="shadowingPlayPauseBtn" title="Play/Pause" aria-label="Play or pause">
                             <i class="fas fa-play"></i>
                         </button>
-                        <button type="button" class="btn btn-secondary" id="shadowingNextBtn" title="Next phrase">
+                        <button type="button" class="btn btn-secondary" id="shadowingNextBtn" title="Next phrase" aria-label="Next phrase">
                             <i class="fas fa-step-forward"></i>
                         </button>
-                        <button type="button" class="btn btn-secondary" id="shadowingRestartBtn" title="Restart">
+                        <button type="button" class="btn btn-secondary" id="shadowingRestartBtn" title="Restart" aria-label="Restart from beginning">
                             <i class="fas fa-redo"></i>
                         </button>
-                        <button type="button" class="btn btn-secondary" id="shadowingStopBtn" title="Stop & Close">
+                        <button type="button" class="btn btn-secondary" id="shadowingStopBtn" title="Stop & Close" aria-label="Stop and close">
                             <i class="fas fa-stop"></i>
                         </button>
                     </div>
 
-                    <div class="shadowing-progress" id="shadowingProgress">
+                    <div class="shadowing-progress" id="shadowingProgress" aria-live="polite">
                         Phrase <span id="currentPhraseNum">0</span> of <span id="totalPhrases">0</span>
                     </div>
                 </div>
@@ -2640,7 +2898,7 @@ Select text and use the toolbar buttons above!"
                 <div class="dictation-progress-bar">
                     <div class="dictation-progress-fill" id="dictationProgressFill" style="width: 0%"></div>
                 </div>
-                <div class="dictation-progress-text">
+                <div class="dictation-progress-text" aria-live="polite">
                     Phrase <span id="dictationCurrentNum">1</span> of <span id="dictationTotalNum">0</span>
                     &nbsp;|&nbsp; Score: <span id="dictationScore">0</span>%
                 </div>
@@ -2650,7 +2908,7 @@ Select text and use the toolbar buttons above!"
                     <button type="button" class="btn btn-primary" id="dictationPlayBtn" title="Play phrase">
                         <i class="fas fa-volume-up"></i> Play
                     </button>
-                    <span class="replay-count" id="replayCount">3 replays left</span>
+                    <span class="replay-count" id="replayCount" aria-live="polite">3 replays left</span>
                     <div class="dictation-speed-control">
                         <label for="dictationSpeed">Speed:</label>
                         <select id="dictationSpeed">
@@ -2748,13 +3006,13 @@ Select text and use the toolbar buttons above!"
 
         <!-- Floating Action Button -->
         <div class="fab-container">
-            <div class="fab-menu" id="fabMenu">
-                <textarea class="fab-menu-input" id="fabInput" placeholder="Quick phrase..."></textarea>
+            <div class="fab-menu" id="fabMenu" role="dialog" aria-label="Quick phrase input">
+                <textarea class="fab-menu-input" id="fabInput" placeholder="Quick phrase..." aria-label="Enter quick phrase"></textarea>
                 <button class="fab-menu-btn" id="fabGenerate">
                     <i class="fas fa-magic"></i> Generate
                 </button>
             </div>
-            <button class="fab" id="fabButton">
+            <button class="fab" id="fabButton" aria-label="Open quick input menu" aria-expanded="false" aria-haspopup="true">
                 <i class="fas fa-plus"></i>
             </button>
         </div>

@@ -8,6 +8,7 @@ import { getAuthHeaders } from '../config.js';
 import { splitIntoPhrases, compareAnswers } from './phrases.js';
 import { detectSilenceGaps, buildTimingsFromSilence, estimatePhraseTimings } from '../audio/analysis.js';
 import { base64ToBlob } from '../api.js';
+import { showToast } from '../ui/toast.js';
 
 function updateDictationProgress() {
     const { dictationCurrentNum, dictationProgressFill, dictationScoreSpan } = dom;
@@ -142,7 +143,7 @@ async function playDictationPhrase() {
         }
     } catch (error) {
         console.error('Error generating dictation audio:', error);
-        alert('Error playing audio: ' + error.message);
+        showToast('error', 'Audio Error', 'Error playing audio: ' + error.message);
     }
 
     if (dictationPlayBtn) {
@@ -351,18 +352,18 @@ function initDictation() {
     }
 
     if (!text) {
-        alert('Please enter some text first. Dictation requires text to check your answers against.');
+        showToast('warning', 'No Text', 'Please enter some text first. Dictation requires text to check your answers against.');
         return;
     }
 
     if (!voiceSelect?.value) {
-        alert('Please select a voice first.');
+        showToast('warning', 'No Voice', 'Please select a voice first.');
         return;
     }
 
     dictationState.phrases = splitIntoPhrases(text);
     if (dictationState.phrases.length === 0) {
-        alert('No phrases found in the text.');
+        showToast('warning', 'No Phrases', 'No phrases found in the text.');
         return;
     }
 

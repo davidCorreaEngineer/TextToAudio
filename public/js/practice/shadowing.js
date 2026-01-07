@@ -8,6 +8,7 @@ import { getAuthHeaders } from '../config.js';
 import { splitIntoPhrases } from './phrases.js';
 import { detectSilenceGaps, buildTimingsFromSilence, estimatePhraseTimings } from '../audio/analysis.js';
 import { base64ToBlob } from '../api.js';
+import { showToast } from '../ui/toast.js';
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -391,12 +392,12 @@ function initShadowing() {
     const hasAudio = hasSrc && hasDuration;
 
     if (!text && !hasAudio) {
-        alert('Please enter some text or load an audio file first.');
+        showToast('warning', 'No Content', 'Please enter some text or load an audio file first.');
         return;
     }
 
     if (!hasAudio && text && !voiceSelect?.value) {
-        alert('Please select a voice first.');
+        showToast('warning', 'No Voice', 'Please select a voice first.');
         return;
     }
 

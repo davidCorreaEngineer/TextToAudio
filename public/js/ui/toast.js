@@ -44,6 +44,17 @@ export function showToast(type, title, message = '', duration = 4000) {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
 
+    // Add ARIA attributes for accessibility
+    // Errors use assertive/alert for immediate announcement
+    // Other types use polite/status for non-intrusive announcement
+    if (type === 'error') {
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+    } else {
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+    }
+
     toast.innerHTML = `
         <div class="toast-icon">
             <i class="fas ${icons[type]}"></i>

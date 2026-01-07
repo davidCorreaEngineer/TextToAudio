@@ -2,6 +2,12 @@
 // THEME / DARK MODE
 // ==========================================================================
 
+function updateThemeToggleAria(themeToggle, isDark) {
+    if (themeToggle) {
+        themeToggle.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    }
+}
+
 export function initTheme() {
     const themeToggle = document.getElementById('themeToggle');
     const html = document.documentElement;
@@ -12,6 +18,7 @@ export function initTheme() {
     const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
 
     html.setAttribute('data-theme', initialTheme);
+    updateThemeToggleAria(themeToggle, initialTheme === 'dark');
 
     if (themeToggle) {
         themeToggle.addEventListener('click', () => {
@@ -20,6 +27,7 @@ export function initTheme() {
 
             html.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
+            updateThemeToggleAria(themeToggle, newTheme === 'dark');
         });
     }
 
@@ -27,6 +35,7 @@ export function initTheme() {
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
         if (!localStorage.getItem('theme')) {
             html.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+            updateThemeToggleAria(themeToggle, e.matches);
         }
     });
 }

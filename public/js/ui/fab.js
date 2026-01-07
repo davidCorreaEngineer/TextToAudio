@@ -4,6 +4,22 @@
 
 import { dom } from '../dom.js';
 
+function closeFabMenu(fabButton, fabMenu, fabInput) {
+    fabButton.classList.remove('active');
+    fabMenu.classList.remove('show');
+    fabButton.setAttribute('aria-expanded', 'false');
+    fabButton.focus();
+}
+
+function openFabMenu(fabButton, fabMenu, fabInput) {
+    fabButton.classList.add('active');
+    fabMenu.classList.add('show');
+    fabButton.setAttribute('aria-expanded', 'true');
+    if (fabInput) {
+        fabInput.focus();
+    }
+}
+
 export function initFab() {
     const fabButton = document.getElementById('fabButton');
     const fabMenu = document.getElementById('fabMenu');
@@ -13,10 +29,28 @@ export function initFab() {
     if (!fabButton || !fabMenu) return;
 
     fabButton.addEventListener('click', () => {
-        fabButton.classList.toggle('active');
-        fabMenu.classList.toggle('show');
-        if (fabMenu.classList.contains('show') && fabInput) {
-            fabInput.focus();
+        const isOpen = fabMenu.classList.contains('show');
+        if (isOpen) {
+            closeFabMenu(fabButton, fabMenu, fabInput);
+        } else {
+            openFabMenu(fabButton, fabMenu, fabInput);
+        }
+    });
+
+    // Escape key to close FAB menu
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && fabMenu.classList.contains('show')) {
+            e.preventDefault();
+            closeFabMenu(fabButton, fabMenu, fabInput);
+        }
+    });
+
+    // Click outside to close
+    document.addEventListener('click', (e) => {
+        if (fabMenu.classList.contains('show') &&
+            !fabMenu.contains(e.target) &&
+            !fabButton.contains(e.target)) {
+            closeFabMenu(fabButton, fabMenu, fabInput);
         }
     });
 
@@ -25,8 +59,7 @@ export function initFab() {
             const text = fabInput?.value.trim();
             if (!text) return;
 
-            fabButton.classList.remove('active');
-            fabMenu.classList.remove('show');
+            closeFabMenu(fabButton, fabMenu, fabInput);
 
             // Set text in editor and switch to editor mode
             if (dom.textEditor) {

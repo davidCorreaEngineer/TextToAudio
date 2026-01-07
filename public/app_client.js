@@ -4,7 +4,7 @@
 // This file imports all modules and wires up the application initialization.
 
 // Config & State
-import { getApiKey, getAuthHeaders } from './js/config.js';
+import { getApiKey, getAuthHeaders, ensureApiKey } from './js/config.js';
 import { dom } from './js/dom.js';
 import {
     currentInputMode, setInputMode,
@@ -43,11 +43,11 @@ import { loadGermanLessons, initGermanLessonsEvents } from './js/lessons/german.
 // APPLICATION INITIALIZATION
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log("app_client.js loaded and DOMContentLoaded event fired.");
 
-    // Ensure API key is available
-    getApiKey();
+    // Ensure API key is available (shows modal if not set)
+    await ensureApiKey();
 
     // Initialize UI
     initTheme();
