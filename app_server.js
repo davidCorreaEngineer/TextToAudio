@@ -164,8 +164,8 @@ async function cleanupOldAudioFiles() {
     }
 }
 
-// Run cleanup every 10 minutes
-setInterval(cleanupOldAudioFiles, 10 * 60 * 1000);
+// Run cleanup every 10 minutes (unref allows Node to exit)
+setInterval(cleanupOldAudioFiles, 10 * 60 * 1000).unref();
 
 // Run cleanup once on startup
 cleanupOldAudioFiles();

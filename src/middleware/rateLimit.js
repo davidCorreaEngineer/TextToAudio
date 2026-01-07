@@ -25,8 +25,9 @@ function createRateLimitMiddleware(options = {}) {
     }
   };
 
-  // Run cleanup every 5 minutes
+  // Run cleanup every 5 minutes (unref allows Node to exit)
   const cleanupInterval = setInterval(cleanup, 5 * 60 * 1000);
+  cleanupInterval.unref();
 
   // Middleware function
   function rateLimitMiddleware(req, res, next) {

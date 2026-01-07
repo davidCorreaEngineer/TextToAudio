@@ -19,12 +19,17 @@ const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
  * @returns {Promise} Promise that rejects on timeout
  */
 function withTimeout(promise, timeoutMs, operation = 'Operation') {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
-        )
-    ]);
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+            () => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)),
+            timeoutMs
+        );
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutId);
+    });
 }
 
 /**
