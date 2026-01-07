@@ -89,6 +89,105 @@ const RATE_LIMIT_MAX_REQUESTS = 10;     // 10 requests per minute per IP
 const AUDIO_FILE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 // =============================================================================
+// INPUT VALIDATION
+// =============================================================================
+
+// Supported languages for TTS
+const SUPPORTED_LANGUAGES = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
+
+// Voice name pattern: language-region-VoiceType-Letter (e.g., en-US-Standard-A)
+const VOICE_NAME_PATTERN = /^[a-z]{2}-[A-Z]{2}-[A-Za-z0-9]+-[A-Z]$/;
+
+/**
+ * Validates and sanitizes voice parameters
+ * @param {Object} params - Raw parameters from request
+ * @returns {Object} - { valid: boolean, errors: string[], sanitized: Object }
+ */
+function validateVoiceParams({ language, voice, speakingRate, pitch }) {
+    const errors = [];
+    const sanitized = {};
+
+    // Validate language
+    if (!language || typeof language !== 'string') {
+        errors.push('Language is required');
+    } else if (!SUPPORTED_LANGUAGES.includes(language)) {
+        errors.push(`Unsupported language: ${language}. Supported: ${SUPPORTED_LANGUAGES.join(', ')}`);
+    } else {
+        sanitized.language = language;
+    }
+
+    // Validate voice name format
+    if (!voice || typeof voice !== 'string') {
+        errors.push('Voice is required');
+    } else if (!VOICE_NAME_PATTERN.test(voice)) {
+        errors.push(`Invalid voice name format: ${voice}`);
+    } else {
+        sanitized.voice = voice;
+    }
+
+    // Validate and clamp speaking rate (0.25 to 4.0)
+    const rate = parseFloat(speakingRate);
+    if (isNaN(rate)) {
+        sanitized.speakingRate = 1.0;
+    } else {
+        sanitized.speakingRate = Math.max(0.25, Math.min(4.0, rate));
+    }
+
+    // Validate and clamp pitch (-20.0 to 20.0)
+    const pitchVal = parseFloat(pitch);
+    if (isNaN(pitchVal)) {
+        sanitized.pitch = 0.0;
+    } else {
+        sanitized.pitch = Math.max(-20.0, Math.min(20.0, pitchVal));
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors,
+        sanitized
+    };
+}
+
+/**
+ * Basic SSML validation - checks for well-formed structure
+ * @param {string} text - Text that may contain SSML
+ * @returns {Object} - { valid: boolean, error: string|null }
+ */
+function validateSsml(text) {
+    if (!text || typeof text !== 'string') {
+        return { valid: false, error: 'Text is required' };
+    }
+
+    // Check for potentially malicious patterns
+    const dangerousPatterns = [
+        /<script/i,
+        /javascript:/i,
+        /on\w+\s*=/i,  // onclick, onerror, etc.
+        /<iframe/i,
+        /<object/i,
+        /<embed/i
+    ];
+
+    for (const pattern of dangerousPatterns) {
+        if (pattern.test(text)) {
+            return { valid: false, error: 'Text contains disallowed content' };
+        }
+    }
+
+    // If text looks like SSML, do basic structure check
+    if (text.includes('<speak>') || text.includes('</speak>')) {
+        // Check for balanced speak tags
+        const speakOpen = (text.match(/<speak>/g) || []).length;
+        const speakClose = (text.match(/<\/speak>/g) || []).length;
+        if (speakOpen !== speakClose) {
+            return { valid: false, error: 'Unbalanced <speak> tags in SSML' };
+        }
+    }
+
+    return { valid: true, error: null };
+}
+
+// =============================================================================
 // SECURITY: API KEY AUTHENTICATION
 // =============================================================================
 
@@ -257,10 +356,8 @@ app.get('/voices', apiKeyAuthMiddleware, async (req, res) => {
     try {
         console.log('Fetching voices from Google TTS API...');
 
-        // Supported Languages: English, Dutch, Spanish, German, Japanese, Australian English, French, Italian, Portuguese and Portuguese
-		const supportedLanguages = ['en-GB', 'en-US', 'en-AU', 'nl-NL', 'es-ES', 'es-US', 'de-DE', 'ja-JP', 'it-IT', 'fr-FR', 'pt-PT', 'pt-BR', 'tr-TR'];
-
-        const voices = await listVoices(client, supportedLanguages);
+        // Use the centralized SUPPORTED_LANGUAGES constant
+        const voices = await listVoices(client, SUPPORTED_LANGUAGES);
 
         console.log(`Filtered voices: ${voices.length}`);
 
@@ -279,7 +376,22 @@ app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(
         const { language, voice, speakingRate, pitch, customText, useSsml } = req.body;
         console.log(`Received test-voice request: Language=${language}, Voice=${voice}, SpeakingRate=${speakingRate}, Pitch=${pitch}, CustomText=${customText ? 'provided' : 'not provided'}, UseSsml=${useSsml}`);
 
-		const testSentences = {
+        // Validate voice parameters
+        const validation = validateVoiceParams({ language, voice, speakingRate, pitch });
+        if (!validation.valid) {
+            console.log(`Validation failed: ${validation.errors.join(', ')}`);
+            return res.status(400).json({ success: false, error: validation.errors.join('; ') });
+        }
+
+        // Validate custom text if SSML mode
+        if (customText && (useSsml === true || useSsml === 'true')) {
+            const ssmlValidation = validateSsml(customText);
+            if (!ssmlValidation.valid) {
+                return res.status(400).json({ success: false, error: ssmlValidation.error });
+            }
+        }
+
+        const testSentences = {
 			'en-US': "How can I improve my English pronunciation?",
 			'en-GB': "It's important to drink water regularly throughout the day.",
 			'en-AU': "What time does the next bus arrive at the station?",
@@ -309,16 +421,16 @@ app.post('/test-voice', apiKeyAuthMiddleware, rateLimitMiddleware, express.json(
                 console.log(`Custom text truncated to ${maxPreviewLength} characters for preview.`);
             }
         } else {
-            testText = testSentences[language] || "This is a test of the selected voice.";
+            testText = testSentences[validation.sanitized.language] || "This is a test of the selected voice.";
         }
         console.log(`Test sentence: "${testText.substring(0, 100)}${testText.length > 100 ? '...' : ''}"`);
 
         const audioContent = await generateSpeech(client, {
             text: testText,
-            languageCode: language,
-            voiceName: voice,
-            speakingRate,
-            pitch,
+            languageCode: validation.sanitized.language,
+            voiceName: validation.sanitized.voice,
+            speakingRate: validation.sanitized.speakingRate,
+            pitch: validation.sanitized.pitch,
             useSsml: useCustomSsml
         });
         console.log("Audio synthesized successfully for test voice.");
@@ -359,8 +471,8 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
         let text = req.body.textContent || '';
         const language = req.body.language;
         const voice = req.body.voice;
-        const speakingRate = parseFloat(req.body.speakingRate) || 1.0;
-        const pitch = parseFloat(req.body.pitch) || 0.0;
+        const speakingRate = req.body.speakingRate;
+        const pitch = req.body.pitch;
         const originalFileName = req.body.originalFileName || `audio_${Date.now()}`;
         const useSsml = req.body.useSsml === 'true';
 
@@ -371,8 +483,23 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
             return res.status(400).json({ success: false, error: 'No text provided.' });
         }
 
+        // Validate voice parameters
+        const validation = validateVoiceParams({ language, voice, speakingRate, pitch });
+        if (!validation.valid) {
+            console.log(`Validation failed: ${validation.errors.join(', ')}`);
+            return res.status(400).json({ success: false, error: validation.errors.join('; ') });
+        }
+
+        // Validate text content (especially if SSML)
+        if (useSsml) {
+            const ssmlValidation = validateSsml(text);
+            if (!ssmlValidation.valid) {
+                return res.status(400).json({ success: false, error: ssmlValidation.error });
+            }
+        }
+
         // **Determine voice category first for correct quota counting**
-        const voiceCategory = getVoiceCategory(voice);
+        const voiceCategory = getVoiceCategory(validation.sanitized.voice);
 
         // **Adjust Counting for Quota Based on Voice Type**
         // Neural2, Studio, Polyglot, and Journey are billed by bytes
@@ -423,10 +550,10 @@ app.post('/synthesize', apiKeyAuthMiddleware, rateLimitMiddleware, upload.none()
 
         const audioContent = await generateSpeech(client, {
             text,
-            languageCode: language,
-            voiceName: voice,
-            speakingRate,
-            pitch,
+            languageCode: validation.sanitized.language,
+            voiceName: validation.sanitized.voice,
+            speakingRate: validation.sanitized.speakingRate,
+            pitch: validation.sanitized.pitch,
             useSsml
         });
         console.log("Audio synthesized successfully.");
@@ -579,14 +706,25 @@ app.post('/synthesize-batch', apiKeyAuthMiddleware, rateLimitMiddleware, upload.
 
         const language = req.body.language;
         const voice = req.body.voice;
-        const speakingRate = parseFloat(req.body.speakingRate) || 1.0;
-        const pitch = parseFloat(req.body.pitch) || 0.0;
+        const speakingRate = req.body.speakingRate;
+        const pitch = req.body.pitch;
         const useSsml = req.body.useSsml === 'true';
 
         console.log(`Received batch synthesize request: ${req.files.length} files, Language=${language}, Voice=${voice}`);
 
+        // Validate voice parameters before processing any files
+        const validation = validateVoiceParams({ language, voice, speakingRate, pitch });
+        if (!validation.valid) {
+            console.log(`Batch validation failed: ${validation.errors.join(', ')}`);
+            // Clean up uploaded files before returning error
+            for (const file of req.files) {
+                try { await fs.unlink(file.path); } catch (e) { /* ignore */ }
+            }
+            return res.status(400).json({ success: false, error: validation.errors.join('; ') });
+        }
+
         const results = [];
-        const voiceCategory = getVoiceCategory(voice);
+        const voiceCategory = getVoiceCategory(validation.sanitized.voice);
         const byteBasedVoices = ['Neural2', 'Studio', 'Polyglot', 'Journey'];
 
         // Process each file sequentially
@@ -643,10 +781,10 @@ app.post('/synthesize-batch', apiKeyAuthMiddleware, rateLimitMiddleware, upload.
                 // Generate speech
                 const audioContent = await generateSpeech(client, {
                     text,
-                    languageCode: language,
-                    voiceName: voice,
-                    speakingRate,
-                    pitch,
+                    languageCode: validation.sanitized.language,
+                    voiceName: validation.sanitized.voice,
+                    speakingRate: validation.sanitized.speakingRate,
+                    pitch: validation.sanitized.pitch,
                     useSsml
                 });
 
