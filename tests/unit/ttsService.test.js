@@ -146,6 +146,209 @@ describe('TTS Service', () => {
             const result = await generateSpeech(mockClient, params);
             expect(result).toEqual(Buffer.from(''));
         });
+
+        it('should timeout after 30 seconds', async () => {
+            jest.useFakeTimers();
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn().mockImplementation(() =>
+                    new Promise(() => {}) // Never resolves
+                )
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            const promise = generateSpeech(mockClient, params);
+
+            jest.advanceTimersByTime(30000);
+
+            await expect(promise).rejects.toThrow('Speech synthesis timed out after 30000ms');
+
+            jest.useRealTimers();
+        });
+
+        it('should retry on 429 quota exceeded error', async () => {
+            jest.useFakeTimers();
+            const mockAudioContent = Buffer.from('success-audio');
+            const quotaError = new Error('Quota exceeded');
+            quotaError.code = 429;
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn()
+                    .mockRejectedValueOnce(quotaError)
+                    .mockResolvedValueOnce([{ audioContent: mockAudioContent }])
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            const promise = generateSpeech(mockClient, params);
+
+            // First attempt fails, wait for retry delay (1000ms)
+            await jest.advanceTimersByTimeAsync(1000);
+
+            const result = await promise;
+
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(2);
+            expect(result).toEqual(mockAudioContent);
+
+            jest.useRealTimers();
+        });
+
+        it('should retry on 503 service unavailable error', async () => {
+            jest.useFakeTimers();
+            const mockAudioContent = Buffer.from('success-audio');
+            const serviceError = new Error('Service unavailable');
+            serviceError.code = 503;
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn()
+                    .mockRejectedValueOnce(serviceError)
+                    .mockResolvedValueOnce([{ audioContent: mockAudioContent }])
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            const promise = generateSpeech(mockClient, params);
+            await jest.advanceTimersByTimeAsync(1000);
+
+            const result = await promise;
+
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(2);
+            expect(result).toEqual(mockAudioContent);
+
+            jest.useRealTimers();
+        });
+
+        it('should retry on RESOURCE_EXHAUSTED error', async () => {
+            jest.useFakeTimers();
+            const mockAudioContent = Buffer.from('success-audio');
+            const resourceError = new Error('RESOURCE_EXHAUSTED: quota limit');
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn()
+                    .mockRejectedValueOnce(resourceError)
+                    .mockResolvedValueOnce([{ audioContent: mockAudioContent }])
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            const promise = generateSpeech(mockClient, params);
+            await jest.advanceTimersByTimeAsync(1000);
+
+            const result = await promise;
+
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(2);
+            expect(result).toEqual(mockAudioContent);
+
+            jest.useRealTimers();
+        });
+
+        it('should not retry on non-retryable errors', async () => {
+            const authError = new Error('Invalid credentials');
+            authError.code = 401;
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn().mockRejectedValue(authError)
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            await expect(generateSpeech(mockClient, params)).rejects.toThrow('Invalid credentials');
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(1);
+        });
+
+        it('should fail after max retries exceeded', async () => {
+            jest.useFakeTimers();
+            const quotaError = new Error('Quota exceeded');
+            quotaError.code = 429;
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn().mockRejectedValue(quotaError)
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            let caughtError;
+            const promise = generateSpeech(mockClient, params).catch(err => {
+                caughtError = err;
+            });
+
+            // Advance through all retry delays: 1s, 2s, 4s (total 7s)
+            await jest.advanceTimersByTimeAsync(7000);
+            await promise;
+
+            expect(caughtError).toBeDefined();
+            expect(caughtError.message).toBe('Quota exceeded');
+            // Initial attempt + 3 retries = 4 calls
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(4);
+
+            jest.useRealTimers();
+        });
+
+        it('should use exponential backoff delays', async () => {
+            jest.useFakeTimers();
+            const mockAudioContent = Buffer.from('success');
+            const quotaError = new Error('Quota exceeded');
+            quotaError.code = 429;
+
+            const mockClient = {
+                synthesizeSpeech: jest.fn()
+                    .mockRejectedValueOnce(quotaError)
+                    .mockRejectedValueOnce(quotaError)
+                    .mockRejectedValueOnce(quotaError)
+                    .mockResolvedValueOnce([{ audioContent: mockAudioContent }])
+            };
+
+            const params = {
+                text: 'Test',
+                languageCode: 'en-US',
+                voiceName: 'en-US-Standard-A'
+            };
+
+            const promise = generateSpeech(mockClient, params);
+
+            // First retry after 1s
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(1);
+            await jest.advanceTimersByTimeAsync(1000);
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(2);
+
+            // Second retry after 2s
+            await jest.advanceTimersByTimeAsync(2000);
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(3);
+
+            // Third retry after 4s
+            await jest.advanceTimersByTimeAsync(4000);
+            expect(mockClient.synthesizeSpeech).toHaveBeenCalledTimes(4);
+
+            const result = await promise;
+            expect(result).toEqual(mockAudioContent);
+
+            jest.useRealTimers();
+        });
     });
 
     describe('listVoices', () => {

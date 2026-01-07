@@ -7,6 +7,69 @@ import { getAuthHeaders, getApiKey } from './config.js';
 // Request timeout in milliseconds (60 seconds)
 const XHR_TIMEOUT_MS = 60000;
 
+/**
+ * Creates and sends an XHR request with progress tracking
+ * @param {Object} options
+ * @param {string} options.url - Request URL
+ * @param {FormData} options.formData - Form data to send
+ * @param {number} options.timeout - Timeout in ms
+ * @param {number} options.progressMax - Max progress value (100 for full, 50 for batch upload phase)
+ * @param {string} options.networkError - Network error message
+ * @param {string} options.timeoutError - Timeout error message
+ * @param {Function} options.onProgress - Progress callback (percent)
+ * @param {Function} options.onComplete - Success callback (response)
+ * @param {Function} options.onError - Error callback (Error)
+ * @returns {XMLHttpRequest}
+ */
+function createXhrRequest({
+    url,
+    formData,
+    timeout = XHR_TIMEOUT_MS,
+    progressMax = 100,
+    networkError = 'Network error',
+    timeoutError = 'Request timed out',
+    onProgress,
+    onComplete,
+    onError
+}) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('X-API-Key', getApiKey());
+    xhr.timeout = timeout;
+
+    if (onProgress) {
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * progressMax);
+                onProgress(percent);
+            }
+        };
+    }
+
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            try {
+                onComplete(JSON.parse(xhr.responseText));
+            } catch (e) {
+                onError(new Error('Invalid response from server'));
+            }
+        } else {
+            try {
+                const errorData = JSON.parse(xhr.responseText);
+                onError(new Error(errorData.error || `Server error: ${xhr.status}`));
+            } catch (e) {
+                onError(new Error(`Server error: ${xhr.status}`));
+            }
+        }
+    };
+
+    xhr.onerror = () => onError(new Error(networkError));
+    xhr.ontimeout = () => onError(new Error(timeoutError));
+
+    xhr.send(formData);
+    return xhr;
+}
+
 // Fetch available voices for selected language
 export async function fetchVoices() {
     const response = await fetch('/voices', {
@@ -99,91 +162,30 @@ export async function fetchGermanLesson(filename) {
 
 // Synthesize speech (returns XHR for progress tracking)
 export function synthesizeSpeech(formData, onProgress, onComplete, onError) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/synthesize', true);
-    xhr.setRequestHeader('X-API-Key', getApiKey());
-    xhr.timeout = XHR_TIMEOUT_MS;
-
-    xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable && onProgress) {
-            const percentComplete = Math.round((event.loaded / event.total) * 100);
-            onProgress(percentComplete);
-        }
-    };
-
-    xhr.onload = () => {
-        if (xhr.status === 200) {
-            try {
-                const response = JSON.parse(xhr.responseText);
-                onComplete(response);
-            } catch (e) {
-                onError(new Error('Invalid response from server'));
-            }
-        } else {
-            try {
-                const errorData = JSON.parse(xhr.responseText);
-                onError(new Error(errorData.error || `Server error: ${xhr.status}`));
-            } catch (e) {
-                onError(new Error(`Server error: ${xhr.status}`));
-            }
-        }
-    };
-
-    xhr.onerror = () => {
-        onError(new Error('Network error - please check your connection'));
-    };
-
-    xhr.ontimeout = () => {
-        onError(new Error('Request timed out. Please try again with shorter text.'));
-    };
-
-    xhr.send(formData);
-    return xhr;
+    return createXhrRequest({
+        url: '/synthesize',
+        formData,
+        onProgress,
+        onComplete,
+        onError,
+        networkError: 'Network error - please check your connection',
+        timeoutError: 'Request timed out. Please try again with shorter text.'
+    });
 }
 
 // Batch synthesize multiple files
 export function synthesizeBatch(formData, onProgress, onComplete, onError) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/synthesize-batch', true);
-    xhr.setRequestHeader('X-API-Key', getApiKey());
-    // Longer timeout for batch (5 minutes)
-    xhr.timeout = XHR_TIMEOUT_MS * 5;
-
-    xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable && onProgress) {
-            const percentComplete = Math.round((event.loaded / event.total) * 50); // 0-50% for upload
-            onProgress(percentComplete);
-        }
-    };
-
-    xhr.onload = () => {
-        if (xhr.status === 200) {
-            try {
-                const response = JSON.parse(xhr.responseText);
-                onComplete(response);
-            } catch (e) {
-                onError(new Error('Invalid response from server'));
-            }
-        } else {
-            try {
-                const errorData = JSON.parse(xhr.responseText);
-                onError(new Error(errorData.error || `Server error: ${xhr.status}`));
-            } catch (e) {
-                onError(new Error(`Server error: ${xhr.status}`));
-            }
-        }
-    };
-
-    xhr.onerror = () => {
-        onError(new Error('Network error during batch processing'));
-    };
-
-    xhr.ontimeout = () => {
-        onError(new Error('Batch processing timed out. Try with fewer files.'));
-    };
-
-    xhr.send(formData);
-    return xhr;
+    return createXhrRequest({
+        url: '/synthesize-batch',
+        formData,
+        timeout: XHR_TIMEOUT_MS * 5,
+        progressMax: 50,
+        onProgress,
+        onComplete,
+        onError,
+        networkError: 'Network error during batch processing',
+        timeoutError: 'Batch processing timed out. Try with fewer files.'
+    });
 }
 
 // Convert base64 to Blob object
