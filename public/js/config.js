@@ -16,7 +16,11 @@ export const FREE_TIER_LIMITS = {
 };
 
 // API Key Management
-let apiKey = localStorage.getItem('tts_api_key') || '';
+// Security: Use sessionStorage instead of localStorage
+// - Clears when tab closes (reduces exposure window)
+// - Not shared across tabs (isolation)
+// - Trade-off: User must re-enter key for each session
+let apiKey = sessionStorage.getItem('tts_api_key') || '';
 
 /**
  * Gets the API key, prompting user if not set
@@ -41,7 +45,7 @@ export async function promptForApiKey() {
 
     if (key) {
         apiKey = key;
-        localStorage.setItem('tts_api_key', apiKey);
+        sessionStorage.setItem('tts_api_key', apiKey);
     }
 
     return key;
@@ -71,7 +75,7 @@ export function hasApiKey() {
 
 export function clearApiKey() {
     apiKey = '';
-    localStorage.removeItem('tts_api_key');
+    sessionStorage.removeItem('tts_api_key');
     location.reload();
 }
 

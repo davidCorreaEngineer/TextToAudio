@@ -23,8 +23,9 @@ function createApiKeyAuthMiddleware(apiKey) {
   }
 
   return function apiKeyAuthMiddleware(req, res, next) {
-    // Check for API key in header (preferred) or query parameter (fallback)
-    const providedKey = req.headers['x-api-key'] || req.query.apiKey;
+    // Security: Only accept API key in header (not query params)
+    // Query params are logged, cached by proxies, and appear in browser history
+    const providedKey = req.headers['x-api-key'];
 
     if (!providedKey) {
       return res.status(401).json({

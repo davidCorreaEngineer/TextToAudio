@@ -2,6 +2,8 @@
 // TOAST NOTIFICATION SYSTEM
 // ==========================================================================
 
+import { escapeHtml } from '../utils/html.js';
+
 let toastContainer = null;
 
 function getContainer() {
@@ -60,8 +62,8 @@ export function showToast(type, title, message = '', duration = 4000) {
             <i class="fas ${icons[type]}"></i>
         </div>
         <div class="toast-content">
-            <div class="toast-title">${title}</div>
-            ${message ? `<div class="toast-message">${message}</div>` : ''}
+            <div class="toast-title">${escapeHtml(title)}</div>
+            ${message ? `<div class="toast-message">${escapeHtml(message)}</div>` : ''}
         </div>
         <button class="toast-close" aria-label="Close">
             <i class="fas fa-times"></i>

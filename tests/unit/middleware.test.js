@@ -37,13 +37,17 @@ describe('createApiKeyAuthMiddleware', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  test('allows request with valid API key in query', () => {
+  test('rejects API key in query parameter (security: prevents key leakage in logs/URLs)', () => {
     req.query.apiKey = VALID_KEY;
 
     middleware(req, res, next);
 
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      error: 'Authentication required. Provide API key via X-API-Key header.'
+    });
   });
 
   test('rejects request with no API key', () => {
@@ -70,13 +74,13 @@ describe('createApiKeyAuthMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('prefers header over query parameter', () => {
+  test('ignores query parameter even when header is also present', () => {
     req.headers['x-api-key'] = VALID_KEY;
-    req.query.apiKey = 'wrong-key';
+    req.query.apiKey = 'wrong-key'; // Should be ignored entirely
 
     middleware(req, res, next);
 
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalled(); // Succeeds because header is valid
   });
 
   test('uses constant-time comparison (prevents timing attacks)', () => {

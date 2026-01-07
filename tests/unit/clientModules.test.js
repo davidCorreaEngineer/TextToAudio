@@ -403,6 +403,17 @@ describe('Toast Module', () => {
             warning: 'fa-exclamation-triangle'
         };
 
+        // XSS prevention helper
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         function createToast(type, title, message = '') {
             const container = document.getElementById('toastContainer');
             if (!container) return null;
@@ -414,8 +425,8 @@ describe('Toast Module', () => {
                     <i class="fas ${icons[type]}"></i>
                 </div>
                 <div class="toast-content">
-                    <div class="toast-title">${title}</div>
-                    ${message ? `<div class="toast-message">${message}</div>` : ''}
+                    <div class="toast-title">${escapeHtml(title)}</div>
+                    ${message ? `<div class="toast-message">${escapeHtml(message)}</div>` : ''}
                 </div>
                 <button class="toast-close" aria-label="Close">
                     <i class="fas fa-times"></i>
@@ -470,6 +481,26 @@ describe('Toast Module', () => {
             createToast('error', 'Test 2');
             const container = document.getElementById('toastContainer');
             expect(container.children.length).toBe(2);
+        });
+
+        test('should escape HTML in title to prevent XSS', () => {
+            const maliciousTitle = '<script>alert("XSS")</script>';
+            const toast = createToast('info', maliciousTitle);
+            // Should not contain raw script tag (should be escaped)
+            expect(toast.innerHTML).not.toContain('<script>');
+            expect(toast.innerHTML).toContain('&lt;script&gt;');
+            // Text content should show the original unescaped text
+            expect(toast.textContent).toContain('<script>');
+        });
+
+        test('should escape HTML in message to prevent XSS', () => {
+            const maliciousMessage = '<img src=x onerror="alert(1)">';
+            const toast = createToast('info', 'Title', maliciousMessage);
+            // Should not contain raw < or > tags (should be escaped)
+            expect(toast.innerHTML).not.toContain('<img');
+            expect(toast.innerHTML).toContain('&lt;img');
+            // Text content should show the original unescaped text
+            expect(toast.textContent).toContain('<img');
         });
     });
 });

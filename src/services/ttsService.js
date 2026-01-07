@@ -10,6 +10,13 @@ const path = require('path');
 const API_TIMEOUT_MS = 30000; // 30 second timeout
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
+const VOICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache TTL
+
+// Voice cache (reduces API calls - voices rarely change)
+const voiceCache = {
+    data: null,
+    timestamp: 0
+};
 
 /**
  * Wraps a promise with a timeout
@@ -131,17 +138,35 @@ async function generateSpeech(client, params) {
 
 /**
  * Lists available voices from Google Cloud TTS
- * Includes timeout for resilience
+ * Includes caching (1 hour TTL) and timeout for resilience
  * @param {textToSpeech.TextToSpeechClient} client - TTS client
  * @param {string[]} languageCodes - Optional language codes filter
  * @returns {Promise<Array>} Array of voice objects
  */
 async function listVoices(client, languageCodes = null) {
+    const now = Date.now();
+
+    // Check cache validity
+    if (voiceCache.data && (now - voiceCache.timestamp) < VOICE_CACHE_TTL_MS) {
+        const voices = voiceCache.data;
+        if (!languageCodes || languageCodes.length === 0) {
+            return voices;
+        }
+        return voices.filter(voice =>
+            voice.languageCodes.some(code => languageCodes.includes(code))
+        );
+    }
+
+    // Cache miss or expired - fetch from API
     const [result] = await withTimeout(
         client.listVoices({}),
         API_TIMEOUT_MS,
         'List voices'
     );
+
+    // Update cache
+    voiceCache.data = result.voices;
+    voiceCache.timestamp = now;
 
     if (!languageCodes || languageCodes.length === 0) {
         return result.voices;
@@ -152,9 +177,18 @@ async function listVoices(client, languageCodes = null) {
     );
 }
 
+/**
+ * Clears the voice cache (for testing or manual refresh)
+ */
+function clearVoiceCache() {
+    voiceCache.data = null;
+    voiceCache.timestamp = 0;
+}
+
 module.exports = {
     createTtsClient,
     buildSynthesisRequest,
     generateSpeech,
-    listVoices
+    listVoices,
+    clearVoiceCache
 };

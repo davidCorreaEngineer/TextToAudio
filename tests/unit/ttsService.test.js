@@ -2,10 +2,15 @@ const {
     createTtsClient,
     buildSynthesisRequest,
     generateSpeech,
-    listVoices
+    listVoices,
+    clearVoiceCache
 } = require('../../src/services/ttsService');
 
 describe('TTS Service', () => {
+    // Clear cache before each test to ensure isolation
+    beforeEach(() => {
+        clearVoiceCache();
+    });
     describe('createTtsClient', () => {
         it('should create TTS client with keyfile path', () => {
             const client = createTtsClient('/path/to/keyfile.json');
@@ -409,6 +414,80 @@ describe('TTS Service', () => {
             };
 
             await expect(listVoices(mockClient)).rejects.toThrow('API Error');
+        });
+
+        describe('caching', () => {
+            const mockVoices = [
+                { name: 'en-US-Standard-A', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
+                { name: 'de-DE-Standard-A', languageCodes: ['de-DE'], ssmlGender: 'MALE' }
+            ];
+
+            it('should cache voices and not call API on second request', async () => {
+                const mockClient = {
+                    listVoices: jest.fn().mockResolvedValue([{ voices: mockVoices }])
+                };
+
+                // First call - should hit API
+                await listVoices(mockClient);
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(1);
+
+                // Second call - should use cache
+                await listVoices(mockClient);
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(1);
+            });
+
+            it('should return filtered results from cache', async () => {
+                const mockClient = {
+                    listVoices: jest.fn().mockResolvedValue([{ voices: mockVoices }])
+                };
+
+                // Populate cache
+                await listVoices(mockClient);
+
+                // Filter from cache
+                const result = await listVoices(mockClient, ['de-DE']);
+                expect(result).toHaveLength(1);
+                expect(result[0].name).toBe('de-DE-Standard-A');
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(1);
+            });
+
+            it('should refresh cache after TTL expires', async () => {
+                jest.useFakeTimers();
+
+                const mockClient = {
+                    listVoices: jest.fn().mockResolvedValue([{ voices: mockVoices }])
+                };
+
+                // First call
+                await listVoices(mockClient);
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(1);
+
+                // Advance past 1 hour TTL
+                jest.advanceTimersByTime(60 * 60 * 1000 + 1);
+
+                // Should fetch again
+                await listVoices(mockClient);
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(2);
+
+                jest.useRealTimers();
+            });
+
+            it('should clear cache when clearVoiceCache is called', async () => {
+                const mockClient = {
+                    listVoices: jest.fn().mockResolvedValue([{ voices: mockVoices }])
+                };
+
+                // Populate cache
+                await listVoices(mockClient);
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(1);
+
+                // Clear cache
+                clearVoiceCache();
+
+                // Should fetch again
+                await listVoices(mockClient);
+                expect(mockClient.listVoices).toHaveBeenCalledTimes(2);
+            });
         });
     });
 });
